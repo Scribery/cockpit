@@ -163,6 +163,7 @@ WEBPACK_PACKAGES = \
 	playground \
 	realmd \
 	selinux \
+	session_recording \
 	shell \
 	sosreport \
 	ssh \
