@@ -28,6 +28,61 @@
     var Terminal = require("cockpit-components-terminal.jsx");
 
     /*
+     * Convert a number to integer number string and pad with zeroes to
+     * specified width.
+     */
+    var padInt = function (n, w) {
+        var i = Math.floor(n);
+        var a = Math.abs(i);
+        var s = a.toString();
+        for (w -= s.length; w > 0; w--) {
+            s = '0' + s;
+        }
+        return ((a < 0) ? '-' : '') + s;
+    }
+
+    /*
+     * Format date and time for a number of milliseconds since Epoch.
+     */
+    var formatDateTime = function (ms) {
+        var d = new Date(ms);
+        return (
+            padInt(d.getFullYear(), 4) + '-' +
+            padInt(d.getMonth(), 2) + '-' +
+            padInt(d.getDate(), 2) + ' ' +
+            padInt(d.getHours(), 2) + ':' +
+            padInt(d.getMinutes(), 2) + ':' +
+            padInt(d.getSeconds(), 2)
+        );
+    };
+
+    /*
+     * Format a time interval from a number of milliseconds.
+     */
+    var formatDuration = function (ms) {
+        var v = Math.floor(ms / 1000);
+        var s = Math.floor(v % 60);
+        v = Math.floor(v / 60);
+        var m = Math.floor(v % 60);
+        v = Math.floor(v / 60);
+        var h = Math.floor(v % 24);
+        var d = Math.floor(v / 24);
+        var str = '';
+
+        if (d > 0) {
+            str += d + ' ' + _("days") + ' ';
+        }
+
+        if (h > 0 || str.length > 0) {
+            str += padInt(h, 2) + ':';
+        }
+
+        str += padInt(m, 2) + ':' + padInt(s, 2);
+
+        return (ms < 0 ? '-' : '') + str;
+    };
+
+    /*
      * A component representing a single recording view.
      * Properties:
      * - recording: either null for no recording data available yet, or a
@@ -104,6 +159,7 @@
                 if (this.state.channel) {
                     terminal = (<Terminal.Terminal
                                     ref="terminal"
+                                    cols={80} rows={24}
                                     channel={this.state.channel} />);
                 } else {
                     terminal = <span>Loading...</span>;
@@ -111,12 +167,8 @@
 
                 return (
                     <div>
-                        <span>{_("Recording")}</span>
+                        <h2>{_("Recording")}</h2>
                         <table>
-                            <tr>
-                                <td>{_("ID")}</td>
-                                <td>{r.id}</td>
-                            </tr>
                             <tr>
                                 <td>{_("Boot ID")}</td>
                                 <td>{r.boot_id}</td>
@@ -131,25 +183,22 @@
                             </tr>
                             <tr>
                                 <td>{_("Start")}</td>
-                                <td>{(new Date(r.start)).toString()}</td>
+                                <td>{formatDateTime(r.start)}</td>
                             </tr>
                             <tr>
                                 <td>{_("End")}</td>
-                                <td>{(new Date(r.end)).toString()}</td>
+                                <td>{formatDateTime(r.end)}</td>
                             </tr>
                             <tr>
                                 <td>{_("Duration")}</td>
-                                <td>XX:XX</td>
+                                <td>{formatDuration(r.end - r.start)}</td>
                             </tr>
                             <tr>
                                 <td>{_("User")}</td>
                                 <td>{r.user}</td>
                             </tr>
-                            <tr>
-                                <td>{_("Playback")}</td>
-                                <td>{terminal}</td>
-                            </tr>
                         </table>
+                        {terminal}
                     </div>
                 );
             }
@@ -174,16 +223,15 @@
         }
 
         render() {
-            var columnTitles = [_("ID"), _("Start"), _("End"), _("Duration"), _("User")];
+            var columnTitles = [_("User"), _("Start"), _("End"), _("Duration")];
             var list = this.props.list;
             var rows = [];
             for (var i = 0; i < list.length; i++) {
                 var r = list[i];
-                var columns = [r.id,
-                               (new Date(r.start)).toString(),
-                               (new Date(r.end)).toString(),
-                               "XX:XX",
-                               r.user];
+                var columns = [r.user,
+                               formatDateTime(r.start),
+                               formatDateTime(r.end),
+                               formatDuration(r.end - r.start)];
                 rows.push(<Listing.ListingRow
                             rowId={r.id}
                             columns={columns}
@@ -192,7 +240,8 @@
             return (
                 <Listing.Listing title={_("Sessions")}
                                  columnTitles={columnTitles}
-                                 emptyCaption={_("No recorded sessions")}>
+                                 emptyCaption={_("No recorded sessions")}
+                                 fullWidth={false}>
                     {rows}
                 </Listing.Listing>
             );
