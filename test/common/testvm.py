@@ -883,7 +883,7 @@ TEST_DOMAIN_XML="""
 
 TEST_DISK_XML="""
 <disk type='file'>
-  <driver name='qemu' type='raw'/>
+  <driver name='qemu' type='%(type)s'/>
   <source file='%(file)s'/>
   <serial>%(serial)s</serial>
   <address type='drive' controller='0' bus='0' target='2' unit='%(unit)d'/>
@@ -928,7 +928,7 @@ class VirtMachine(Machine):
 
         # Unique identifiers for hostnet config
         self._hostnet = 8
-
+        self._disks = [ ]
         self._domain = None
 
         # init variables needed for running a vm
@@ -1106,13 +1106,21 @@ class VirtMachine(Machine):
         finally:
             self._cleanup()
 
-    def start(self, maintain=False, macaddr=None, memory_mb=None, cpus=None, wait_for_ip=True):
-        if self.fetch and not os.path.exists(self.image_file):
+    def pull(self, image):
+        if "/" in image:
+            image_file = os.path.abspath(image)
+        else:
+            image_file = os.path.join(LOCAL_DIR, "..", "..", "bots", "images", image)
+        if self.fetch and not os.path.exists(image_file):
             try:
-                subprocess.check_call([ "image-download", self.image_file ])
+                subprocess.check_call([ "image-download", image_file ])
             except OSError, ex:
                 if ex.errno != errno.ENOENT:
                     raise
+        return image_file
+
+    def start(self, maintain=False, macaddr=None, memory_mb=None, cpus=None, wait_for_ip=True):
+        self.pull(self.image_file)
 
         tries = 0
         while True:
@@ -1237,11 +1245,8 @@ class VirtMachine(Machine):
     def _cleanup(self, quick=False):
         self.disconnect()
         try:
-            if hasattr(self, '_disks'):
-                for index in dict(self._disks):
-                    self.rem_disk(index, quick)
-
-            self._disks = { }
+            for disk in self._disks:
+                self.rem_disk(disk, quick)
 
             if self._domain:
                 # remove the debug output
@@ -1288,13 +1293,8 @@ class VirtMachine(Machine):
         finally:
             self._cleanup()
 
-    def add_disk(self, size, serial=None):
-        index = 1
-        while index in self._disks:
-            index += 1
-
-        if not serial:
-            serial = "DISK%d" % index
+    def add_disk(self, size=None, serial=None, path=None, type='raw'):
+        index = len(self._disks)
 
         try:
             os.makedirs(self.run_dir, 0750)
@@ -1302,70 +1302,51 @@ class VirtMachine(Machine):
             if ex.errno != errno.EEXIST:
                 raise
 
-        path = os.path.join(self.run_dir, "disk-%s-%d" % (self._domain.name(), index))
-        if os.path.exists(path):
-            os.unlink(path)
+        if path:
+            (unused, image) = tempfile.mkstemp(suffix='.qcow2', prefix=os.path.basename(path), dir=self.run_dir)
+            subprocess.check_call([ "qemu-img", "create", "-q", "-f", "qcow2",
+                                    "-o", "backing_file=" + os.path.realpath(path), image ])
 
-        subprocess.check_call(["qemu-img", "create", "-q", "-f", "raw", path, str(size)])
+        else:
+            assert size is not None
+            name = "disk-{0}".format(self._domain.name())
+            (unused, image) = tempfile.mkstemp(suffix='qcow2', prefix=name, dir=self.run_dir)
+            subprocess.check_call(["qemu-img", "create", "-q", "-f", "raw", image, str(size)])
 
+        if not serial:
+            serial = "DISK{0}".format(index)
         dev = 'sd' + string.ascii_lowercase[index]
         disk_desc = TEST_DISK_XML % {
-                          'file': path,
-                          'serial': serial,
-                          'unit': index,
-                          'dev': dev
-                        }
+            'file': image,
+            'serial': serial,
+            'unit': index,
+            'dev': dev,
+            'type': type,
+        }
 
         if self._domain.attachDeviceFlags(disk_desc, libvirt.VIR_DOMAIN_AFFECT_LIVE) != 0:
             raise Failure("Unable to add disk to vm")
 
-        self._disks[index] = {
-            "path": path,
+        disk = {
+            "path": image,
             "serial": serial,
-            "filename": path,
-            "dev": dev
+            "filename": image,
+            "dev": dev,
+            "index": index,
+            "type": type,
         }
 
-        return index
+        self._disks.append(disk)
+        return disk
 
-    def set_disk_io_speed(self, disk_index, speed_in_bytes=0):
-        subprocess.check_call([
-              "virsh", "-c", "qemu:///session", "blkdeviotune", "--current", str(self._domain.ID()), self._disks[disk_index]["dev"],
-              "--total-bytes-sec", str(speed_in_bytes)
-            ])
-
-    def add_disk_path(self, main_index):
-        index = 1
-        while index in self._disks:
-            index += 1
-
-        filename = self._disks[main_index]["path"]
-        serial = self._disks[main_index]["serial"]
-
-        dev = 'sd' + string.ascii_lowercase[index]
-        disk_desc = TEST_DISK_XML % {'file': filename, 'serial': serial, 'unit': index, 'dev': dev}
-
-        if self._domain.attachDeviceFlags(disk_desc, libvirt.VIR_DOMAIN_AFFECT_LIVE ) != 0:
-            raise Failure("Unable to add disk to vm")
-
-        self._disks[index] = {
-            "filename": filename,
-            "serial": serial,
-            "dev": dev
-        }
-
-        return index
-
-    def rem_disk(self, index, quick=False):
-        assert index in self._disks
-        disk = self._disks.pop(index)
-
+    def rem_disk(self, disk, quick=False):
         if not quick:
             disk_desc = TEST_DISK_XML % {
                 'file': disk["filename"],
                 'serial': disk["serial"],
-                'unit': index,
-                'dev': disk["dev"]
+                'unit': disk["index"],
+                'dev': disk["dev"],
+                'type': disk["type"]
             }
 
             if self._domain.detachDeviceFlags(disk_desc, libvirt.VIR_DOMAIN_AFFECT_LIVE ) != 0:

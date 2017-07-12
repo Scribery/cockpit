@@ -29,6 +29,7 @@ import { updateOrAddVm,
     getVm,
     getAllVms,
     delayPolling,
+    undefineVm,
     deleteUnlistedVMs,
     vmActionFailed,
 } from './actions.es6';
@@ -139,7 +140,10 @@ LIBVIRT_PROVIDER = {
     GET_ALL_VMS ({ connectionName }) {
         logDebug(`${this.name}.GET_ALL_VMS(connectionName='${connectionName}'):`);
         if (connectionName) {
-            return dispatch => doGetAllVms(dispatch, connectionName);
+            return dispatch => {
+                startEventMonitor(dispatch, connectionName);
+                doGetAllVms(dispatch, connectionName);
+            };
         }
 
         return dispatch => { // for all connections
@@ -151,10 +155,7 @@ LIBVIRT_PROVIDER = {
                         connectionName => canLoggedUserConnectSession(connectionName, loggedUser))
                     .map(connectionName => dispatch(getAllVms(connectionName)));
 
-                return cockpit.all(promises)
-                    .then(() => { // keep polling AFTER all VM details have been read (avoid overlap)
-                        dispatch(delayPolling(getAllVms()));
-                    });
+                return cockpit.all(promises);
             });
         };
     },
@@ -303,7 +304,7 @@ function spawnVirsh({connectionName, method, failHandler, args}) {
             logDebug(msg);
             return ;
         }
-        console.error(msg);
+        console.warn(msg);
     });
 }
 
@@ -315,7 +316,7 @@ function parseDumpxml(dispatch, connectionName, domXml) {
     const xmlDoc = $.parseXML(domXml);
 
     if (!xmlDoc) {
-        console.error(`Can't parse dumpxml, input: "${domXml}"`);
+        console.warn(`Can't parse dumpxml, input: "${domXml}"`);
         return ;
     }
 
@@ -409,7 +410,7 @@ function parseDumpxmlForDisks(devicesElem) {
                 disks[disk.target] = disk;
                 logDebug(`parseDumpxmlForDisks(): disk device found: ${JSON.stringify(disk)}`);
             } else {
-                console.error(`parseDumpxmlForDisks(): mandatory properties are missing in dumpxml, found: ${JSON.stringify(disk)}`);
+                console.warn(`parseDumpxmlForDisks(): mandatory properties are missing in dumpxml, found: ${JSON.stringify(disk)}`);
             }
         }
     }
@@ -510,7 +511,7 @@ function parseDumpxmlForConsoles(devicesElem) {
                 displays[display.type] = display;
                 logDebug(`parseDumpxmlForConsoles(): graphics device found: ${JSON.stringify(display)}`);
             } else {
-                console.error(`parseDumpxmlForConsoles(): mandatory properties are missing in dumpxml, found: ${JSON.stringify(display)}`);
+                console.warn(`parseDumpxmlForConsoles(): mandatory properties are missing in dumpxml, found: ${JSON.stringify(display)}`);
             }
         }
     }
@@ -522,11 +523,12 @@ function parseDominfo(dispatch, connectionName, name, domInfo) {
     const lines = parseLines(domInfo);
     const state = getValueFromLine(lines, 'State:');
     const autostart = getValueFromLine(lines, 'Autostart:');
+    const persistent = getValueFromLine(lines, 'Persistent:') == 'yes';
 
     if (!LIBVIRT_PROVIDER.isRunning(state)) { // clean usage data
-        dispatch(updateVm({connectionName, name, state, autostart, actualTimeInMs: -1}));
+        dispatch(updateVm({connectionName, name, state, autostart, persistent, actualTimeInMs: -1}));
     } else {
-        dispatch(updateVm({connectionName, name, state, autostart}));
+        dispatch(updateVm({connectionName, name, state, persistent, autostart}));
     }
 
     return state;
@@ -579,7 +581,7 @@ function parseDomstatsForDisks(domstatsLines) {
                 allocation,
             };
         } else {
-            console.error(`parseDomstatsForDisks(): mandatory property is missing in domstats (block\.${i}\.name)`);
+            console.warn(`parseDomstatsForDisks(): mandatory property is missing in domstats (block\.${i}\.name)`);
         }
     }
     return disksStats;
@@ -599,6 +601,7 @@ function doUsagePolling (name, connectionName) {
 
     const canFailHandler = ({exception, data}) => {
         console.info(`The 'virsh' command failed, as expected: "${JSON.stringify(exception)}", data: "${JSON.stringify(data)}"`);
+        return cockpit.resolve();
     };
 
     return (dispatch, getState) => {
@@ -618,6 +621,92 @@ function doUsagePolling (name, connectionName) {
                     parseDomstats(dispatch, connectionName, name, domstats);
             }).then(() => dispatch(delayPolling(doUsagePolling(name, connectionName), null, name, connectionName)));
     };
+}
+
+function handleEvent(dispatch, connectionName, line) {
+    // example lines, some with detail, one without:
+    // event 'reboot' for domain sid-lxde
+    // event 'lifecycle' for domain sid-lxde: Shutdown Finished
+    // event 'device-removed' for domain green: virtio-disk2
+    const eventRe = /event '([a-z-]+)' .* domain ([^:]+)(?:: (.*))?$/;
+
+    var match = eventRe.exec(line);
+    if (!match) {
+        console.warn("Unable to parse event, ignoring:", line);
+        return;
+    }
+    var [event_, name, info] = match.slice(1);
+
+    logDebug(`handleEvent(${connectionName}): domain ${name}: got event ${event_}; details: ${info}`);
+
+    // types and details: https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainEventID
+    switch (event_) {
+        case 'lifecycle':
+            let type = info.split(' ')[0];
+            switch (type) {
+                case 'Undefined':
+                    dispatch(undefineVm(connectionName, name));
+                    break;
+
+                case 'Defined':
+                case 'Started':
+                    dispatch(getVm(connectionName, name));
+                    break;
+
+                case 'Stopped':
+                    dispatch(updateVm({connectionName, name, state: 'shut off', actualTimeInMs: -1}));
+                    // transient VMs don't have a separate Undefined event, so remove them on stop
+                    dispatch(undefineVm(connectionName, name, true));
+                    break;
+
+                case 'Suspended':
+                    dispatch(updateVm({connectionName, name, state: 'paused'}));
+                    break;
+
+                case 'Resumed':
+                    dispatch(updateVm({connectionName, name, state: 'running'}));
+                    break;
+
+                default:
+                    logDebug(`Unhandled lifecycle event type ${type} in event: ${line}`);
+            }
+            break;
+
+        case 'metadata-change':
+        case 'device-added':
+        case 'device-removed':
+        case 'disk-change':
+        case 'tray-change':
+        case 'control-error':
+            // these (can) change what we display, so re-read the state
+            dispatch(getVm(connectionName, name));
+            break;
+
+        default:
+            logDebug(`handleEvent ${connectionName} ${name}: ignoring event ${line}`);
+    }
+}
+
+function startEventMonitor(dispatch, connectionName) {
+    var output_buf = '';
+
+    // set up event monitor for that connection; force PTY as otherwise the buffering
+    // will not show every line immediately
+    cockpit.spawn(['virsh'].concat(VMS_CONFIG.Virsh.connections[connectionName].params).concat(['-r', 'event', '--all', '--loop']), {'err': 'message', 'pty': true})
+        .stream(data => {
+            // buffer and line-split the output, there is no guarantee that we always get whole lines
+            output_buf += data;
+            let lines = output_buf.split('\n');
+            while (lines.length > 1)
+                handleEvent(dispatch, connectionName, lines.shift().trim());
+            output_buf = lines[0];
+        })
+        .fail(ex => {
+            // this usually happens if libvirtd gets stopped or isn't running; retry connecting every 10s
+            console.log("virsh event failed:", ex);
+            dispatch(deleteUnlistedVMs(connectionName, []));
+            dispatch(delayPolling(getAllVms(connectionName)));
+        });
 }
 
 export default LIBVIRT_PROVIDER;

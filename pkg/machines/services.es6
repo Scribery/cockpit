@@ -28,10 +28,9 @@ export function spawnProcess({ cmd, args = [], stdin, failHandler }) {
         .input(stdin))
         .fail((exception, data) => {
             if (failHandler) {
-                failHandler({exception, data});
-                return ;
+                return failHandler({exception, data, spawnArgs});
             }
-            console.error(`spawn '${cmd}' process returned error: "${JSON.stringify(exception)}", data: "${JSON.stringify(data)}"`);
+            console.warn(`spawn '${cmd}' process returned error: "${JSON.stringify(exception)}", data: "${JSON.stringify(data)}"`);
         });
 }
 
@@ -41,7 +40,7 @@ export function spawnScript({ script }) {
 
     return spawn(cockpit.script(spawnArgs, [], { err: "message", environ: ['LC_ALL=C'] }))
         .fail((ex, data) =>
-            console.error(`spawn '${script}' script error: "${JSON.stringify(ex)}", data: "${JSON.stringify(data)}"`));
+            console.warn(`spawn '${script}' script error: "${JSON.stringify(ex)}", data: "${JSON.stringify(data)}"`));
 }
 
 function spawn(command) {

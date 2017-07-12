@@ -211,10 +211,6 @@ ExecStart=/bin/sh -c 'for s in $(seq 10); do echo SLOW; sleep 0.1; done; sleep 1
         b.go("#/?prio=*&start=oldest&service=slow10.service")
         wait_slow10()
 
-        # Debian 8 doesn't have persistent journal logging across boots
-        if m.image in [ "debian-stable" ]:
-            return
-
         # insert messages as errors because we know these will be shown by default
         m.execute("systemctl start systemd-journald.service")
         m.execute("logger -p user.err --tag check-journal BEFORE BOOT");
@@ -303,7 +299,7 @@ s.send("PRIORITY=3\\nFOO=bar\\n")'
 
         b.wait_text("#journal-entry-message", "[no data]")
 
-    @skipImage("Newer version of ABRT required", "centos-7", "rhel-7", "fedora-i386", "rhel-7-4")
+    @skipImage("Newer version of ABRT required", "centos-7", "rhel-7", "fedora-25", "fedora-i386", "fedora-testing", "rhel-7-4")
     @skipImage("ABRT not available", "debian-stable", "debian-testing", "ubuntu-stable", "ubuntu-1604", "rhel-atomic", "fedora-atomic")
     def testAbrtSegv(self):
         b = self.browser
@@ -338,7 +334,7 @@ s.send("PRIORITY=3\\nFOO=bar\\n")'
         sel += " .panel-body:contains('signal: 11  executable: ')"
         b.wait_present(sel)
 
-    @skipImage("Newer version of ABRT required", "centos-7", "rhel-7", "fedora-i386", "rhel-7-4")
+    @skipImage("Newer version of ABRT required", "centos-7", "rhel-7", "fedora-25", "fedora-i386", "fedora-testing", "rhel-7-4")
     @skipImage("ABRT not available", "debian-stable", "debian-testing", "ubuntu-stable", "ubuntu-1604", "rhel-atomic", "fedora-atomic")
     def testAbrtDelete(self):
         b = self.browser
@@ -371,11 +367,16 @@ s.send("PRIORITY=3\\nFOO=bar\\n")'
         sel = "#journal-entry .panel #journal-entry-message:contains('crashed in __nanosleep()')"
         b.wait_present(sel)
 
-    @skipImage("Newer version of ABRT required", "centos-7", "rhel-7", "fedora-i386", "rhel-7-4")
+    @skipImage("Newer version of ABRT required", "centos-7", "rhel-7", "fedora-25", "fedora-i386", "fedora-testing", "rhel-7-4")
     @skipImage("ABRT not available", "debian-stable", "debian-testing", "ubuntu-stable", "ubuntu-1604", "rhel-atomic", "fedora-atomic")
     def testAbrtReport(self):
         b = self.browser
         m = self.machine
+
+        # start mock FAF server
+        m.upload(["verify/files/mock-faf-server.py"], "/tmp/")
+        m.execute("setsid python /tmp/mock-faf-server.py >/tmp/mock-faf.log 2>&1 &")
+        m.execute("echo 'URL=http://localhost:12345' >> /etc/libreport/plugins/ureport.conf")
 
         self.login_and_go("/system/logs")
 
@@ -392,11 +393,6 @@ s.send("PRIORITY=3\\nFOO=bar\\n")'
         b.wait_present(sel)
         b.wait_visible(sel)
 
-        # If 'Reported' then skip test
-        sel = "#journal-entry-fields .nav .problem-btn:contains('Reported')"
-        if b.is_present(sel):
-            return
-
         sel = "#journal-entry-fields .nav .btn-primary:contains('Report')"
         b.wait_present(sel)
         b.wait_visible(sel)
@@ -405,7 +401,7 @@ s.send("PRIORITY=3\\nFOO=bar\\n")'
         sel = "#journal-entry-fields .nav .problem-btn:contains('Reported')"
         b.wait_present(sel)
         b.wait_visible(sel)
-        self.assertTrue("/reports/bthash/" in b.attr(sel, 'href'))
+        self.assertIn("/reports/bthash/123deadbeef", b.attr(sel, 'href'))
 
 if __name__ == '__main__':
     test_main()

@@ -621,6 +621,9 @@ class MachineCase(unittest.TestCase):
         # SELinux and nfs-utils fighting: https://bugzilla.redhat.com/show_bug.cgi?id=1447854
         ".*type=1400 .*denied  { execute } for.*sm-notify.*init_t.*",
 
+        # SELinux prevents agetty from being executed by systemd: https://bugzilla.redhat.com/show_bug.cgi?id=1449569
+        ".*type=1400 .*denied  { execute } for.*agetty.*init_t.*",
+
         # apparmor loading
         "(audit: )?type=1400.*apparmor=\"STATUS\".*",
 
@@ -639,8 +642,7 @@ class MachineCase(unittest.TestCase):
 
         # HACK https://bugzilla.redhat.com/show_bug.cgi?id=1461893
         # selinux errors while logging in via ssh
-        'type=1401 audit(.*): op=security_compute_av reason=bounds scontext=system_u:system_r:sshd_t:s0-s0:c0.c1023 tcontext=unconfined_u:system_r:svirt_lxc_net_t:s0-s0:c0.c1023 tclass=process perms=transition,sigchld,sigstop,signull,signal,getattr',
-        'type=1401 audit(.*): op=security_compute_av reason=bounds scontext=system_u:system_r:sshd_t:s0-s0:c0.c1023 tcontext=unconfined_u:unconfined_r:svirt_lxc_net_t:s0-s0:c0.c1023 tclass=process perms=transition,sigchld,sigstop,signull,signal,getattr',
+        'type=1401 audit(.*): op=security_compute_av reason=bounds .* tclass=process perms=transition.*',
 
         # Various operating systems see this from time to time
         "Journal file.*truncated, ignoring file.",
@@ -661,6 +663,7 @@ class MachineCase(unittest.TestCase):
                                     ".*Broken pipe.*",
                                     "g_dbus_connection_real_closed: Remote peer vanished with error: Underlying GIOStream returned 0 bytes on an async read \\(g-io-error-quark, 0\\). Exiting.",
                                     "connection unexpectedly closed by peer",
+                                    "peer did not close io when expected",
                                     # HACK: https://bugzilla.redhat.com/show_bug.cgi?id=1141137
                                     "localhost: bridge program failed: Child process killed by signal 9",
                                     "request timed out, closing",
@@ -747,7 +750,8 @@ class MachineCase(unittest.TestCase):
     def copy_cores(self, title, label=None):
         for name, m in self.machines.iteritems():
             if m.address:
-                dest = "%s-%s-%s.core" % (label or self.label(), m.address, title)
+                directory = "%s-%s-%s.core" % (label or self.label(), m.address, title)
+                dest = os.path.abspath(directory)
                 m.download_dir("/var/lib/systemd/coredump", dest)
                 try:
                     os.rmdir(dest)
