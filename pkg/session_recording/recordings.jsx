@@ -48,7 +48,7 @@
         var d = new Date(ms);
         return (
             padInt(d.getFullYear(), 4) + '-' +
-            padInt(d.getMonth(), 2) + '-' +
+            padInt(d.getMonth() + 1, 2) + '-' +
             padInt(d.getDate(), 2) + ' ' +
             padInt(d.getHours(), 2) + ':' +
             padInt(d.getMinutes(), 2) + ':' +
