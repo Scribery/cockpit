@@ -20,21 +20,21 @@
 (function() {
     "use strict";
 
-    var cockpit = require("cockpit");
-    var _ = cockpit.gettext;
-    var Journal = require("journal");
-    var React = require("react");
-    var Listing = require("cockpit-components-listing.jsx");
-    var Terminal = require("cockpit-components-terminal.jsx");
+    let cockpit = require("cockpit");
+    let _ = cockpit.gettext;
+    let Journal = require("journal");
+    let React = require("react");
+    let Listing = require("cockpit-components-listing.jsx");
+    let Terminal = require("cockpit-components-terminal.jsx");
 
     /*
      * Convert a number to integer number string and pad with zeroes to
      * specified width.
      */
-    var padInt = function (n, w) {
-        var i = Math.floor(n);
-        var a = Math.abs(i);
-        var s = a.toString();
+    let padInt = function (n, w) {
+        let i = Math.floor(n);
+        let a = Math.abs(i);
+        let s = a.toString();
         for (w -= s.length; w > 0; w--) {
             s = '0' + s;
         }
@@ -44,8 +44,8 @@
     /*
      * Format date and time for a number of milliseconds since Epoch.
      */
-    var formatDateTime = function (ms) {
-        var d = new Date(ms);
+    let formatDateTime = function (ms) {
+        let d = new Date(ms);
         return (
             padInt(d.getFullYear(), 4) + '-' +
             padInt(d.getMonth() + 1, 2) + '-' +
@@ -59,15 +59,15 @@
     /*
      * Format a time interval from a number of milliseconds.
      */
-    var formatDuration = function (ms) {
-        var v = Math.floor(ms / 1000);
-        var s = Math.floor(v % 60);
+    let formatDuration = function (ms) {
+        let v = Math.floor(ms / 1000);
+        let s = Math.floor(v % 60);
         v = Math.floor(v / 60);
-        var m = Math.floor(v % 60);
+        let m = Math.floor(v % 60);
         v = Math.floor(v / 60);
-        var h = Math.floor(v % 24);
-        var d = Math.floor(v / 24);
-        var str = '';
+        let h = Math.floor(v % 24);
+        let d = Math.floor(v / 24);
+        let str = '';
 
         if (d > 0) {
             str += d + ' ' + _("days") + ' ';
@@ -88,7 +88,7 @@
      * - recording: either null for no recording data available yet, or a
      *              recording object, as created by the View below.
      */
-    var Recording = class extends React.Component {
+    let Recording = class extends React.Component {
         constructor(props) {
             super(props);
             this.state = {
@@ -101,7 +101,7 @@
          * specified recording. Returns null if there is no recording data.
          */
         createChannel() {
-            var r = this.props.recording;
+            let r = this.props.recording;
             if (!r) {
                 return null;
             }
@@ -130,7 +130,7 @@
 
         componentDidUpdate(prevProps) {
             if (this.props.recording != prevProps.recording) {
-                var channel;
+                let channel;
                 if (this.state.channel != null) {
                     this.state.channel.close();
                 }
@@ -150,11 +150,11 @@
         }
 
         render() {
-            var r = this.props.recording;
+            let r = this.props.recording;
             if (r == null) {
                 return <span>Loading...</span>;
             } else {
-                var terminal;
+                let terminal;
 
                 if (this.state.channel) {
                     terminal = (<Terminal.Terminal
@@ -210,7 +210,7 @@
      * Properties:
      * - list: an array with recording objects, as created by the View below
      */
-    var RecordingList = class extends React.Component {
+    let RecordingList = class extends React.Component {
         constructor(props) {
             super(props);
         }
@@ -223,12 +223,12 @@
         }
 
         render() {
-            var columnTitles = [_("User"), _("Start"), _("End"), _("Duration")];
-            var list = this.props.list;
-            var rows = [];
-            for (var i = 0; i < list.length; i++) {
-                var r = list[i];
-                var columns = [r.user,
+            let columnTitles = [_("User"), _("Start"), _("End"), _("Duration")];
+            let list = this.props.list;
+            let rows = [];
+            for (let i = 0; i < list.length; i++) {
+                let r = list[i];
+                let columns = [r.user,
                                formatDateTime(r.start),
                                formatDateTime(r.end),
                                formatDuration(r.end - r.start)];
@@ -253,7 +253,7 @@
      * single recording. Extracts the ID of the recording to display from
      * cockpit.location.path[0]. If it's zero, displays the list.
      */
-    var View = class extends React.Component {
+    let View = class extends React.Component {
         constructor(props) {
             super(props);
             this.onLocationChanged = this.onLocationChanged.bind(this);
@@ -291,27 +291,27 @@
          * Ingest journal entries sent by journalctl.
          */
         journalctlIngest(entryList) {
-            var recordingList = this.state.recordingList.slice();
-            var i;
-            var j;
+            let recordingList = this.state.recordingList.slice();
+            let i;
+            let j;
 
             for (i = 0; i < entryList.length; i++) {
-                var e = entryList[i];
-                var boot_id = e["_BOOT_ID"];
-                var session_id = e["TLOG_SESSION"];
-                var process_id = e["_PID"];
+                let e = entryList[i];
+                let boot_id = e["_BOOT_ID"];
+                let session_id = e["TLOG_SESSION"];
+                let process_id = e["_PID"];
 
                 /* Skip entries with missing session ID */
                 if (session_id === undefined) {
                     continue;
                 }
 
-                var id = boot_id + "-" + session_id + "-" + process_id;
-                var ts = Math.floor(
+                let id = boot_id + "-" + session_id + "-" + process_id;
+                let ts = Math.floor(
                             parseInt(e["__REALTIME_TIMESTAMP"], 10) /
                                 1000);
 
-                var r = this.recordingMap[id];
+                let r = this.recordingMap[id];
                 /* If no recording found */
                 if (r === undefined) {
                     /* Create new recording */
@@ -364,11 +364,11 @@
          */
         journalctlStart() {
             /* TODO Lookup UID of "tlog" user on module init */
-            var matches = ["_UID=987"];
-            var options = {follow: true, count: "all"};
+            let matches = ["_UID=987"];
+            let options = {follow: true, count: "all"};
 
             if (this.state.recordingID !== null) {
-                var parts = this.state.recordingID.split('-', 3);
+                let parts = this.state.recordingID.split('-', 3);
                 matches = matches.concat([
                             "_BOOT_ID=" + parts[0],
                             "TLOG_SESSION=" + parts[1],
