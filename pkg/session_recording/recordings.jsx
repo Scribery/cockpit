@@ -99,7 +99,7 @@
 
         componentDidMount() {
             let funcDate = this.handleDateChange;
-            $(this.textInput).datepicker({
+            $(this.refs.datepicker).datepicker({
                 autoclose: true,
                 todayHighlight: true,
                 format: 'yyyy-mm-dd',
@@ -118,10 +118,7 @@
 
         render() {
             return (
-                <input ref={(input) => { this.textInput = input; }}
-                   className="form-control date"
-                   type="text"
-                   onChange={this.handleDateChange} />
+                <input ref="datepicker" className="form-control date" type="text" />
             );
         }
     }
@@ -257,12 +254,6 @@
     let RecordingList = class extends React.Component {
         constructor(props) {
             super(props);
-            this.handleDateSinceChange = this.handleDateSinceChange.bind(this);
-            this.handleDateUntilChange = this.handleDateUntilChange.bind(this);
-            this.state = {
-                dateSince: null,
-                dateUntil: null,
-            };
         }
 
         /*
@@ -272,19 +263,7 @@
             cockpit.location.go([recording.id]);
         }
 
-        handleDateSinceChange(date) {
-            this.setState({dateSince: date});
-            this.props.onDateSinceChange(date);
-        }
-
-        handleDateUntilChange(date) {
-            this.setState({dateUntil: date});
-            this.props.onDateUntilChange(date);
-        }
-
         render() {
-            const dateSince = this.state.dateSince;
-            const dateUntil = this.state.dateUntil;
             let columnTitles = [_("User"), _("Start"), _("End"), _("Duration")];
             let list = this.props.list;
             let rows = [];
@@ -308,13 +287,13 @@
                                     <label className="control-label" for="dateSince">Date Since</label>
                                 </td>
                                 <td>
-                                    <Datepicker date={dateSince} onDateChange={this.handleDateSinceChange} />
+                                    <Datepicker onDateChange={this.props.onDateSinceChange} />
                                 </td>
                                 <td className="top">
                                     <label className="control-label" for="dateUntil">Date Until</label>
                                 </td>
                                 <td>
-                                    <Datepicker date={dateUntil} onDateChange={this.handleDateUntilChange} />
+                                    <Datepicker onDateChange={this.props.onDateUntilChange} />
                                 </td>
                             </tr>
                         </table>
@@ -489,7 +468,7 @@
          * Will stop journalctl if it's running.
          */
         journalctlRestart() {
-            if(this.journalctlIsRunning()) {
+            if (this.journalctlIsRunning()) {
                 this.journalctl.stop();
             }
             this.journalctlStart();
@@ -506,14 +485,10 @@
 
         handleDateSinceChange(date) {
             this.setState({dateSince: date});
-            this.clearRecordings();
-            this.journalctlRestart();
         }
 
         handleDateUntilChange(date) {
             this.setState({dateUntil: date});
-            this.clearRecordings();
-            this.journalctlRestart();
         }
 
         componentDidMount() {
@@ -540,17 +515,18 @@
                 }
                 this.journalctlStart();
             }
+            if (this.state.dateSince != prevState.dateSince || this.state.dateUntil != prevState.dateUntil) {
+                this.clearRecordings();
+                this.journalctlRestart();
+            }
         }
 
         render() {
-            const dateSince = this.state.dateSince;
-            const dateUntil = this.state.dateUntil;
-
             if (this.state.recordingID === null) {
                 return (
                     <RecordingList
-                        dateSince={dateSince} onDateSinceChange={this.handleDateSinceChange}
-                        dateUntil={dateUntil} onDateUntilChange={this.handleDateUntilChange}
+                        onDateSinceChange={this.handleDateSinceChange}
+                        onDateUntilChange={this.handleDateUntilChange}
                         list={this.state.recordingList} />
                 );
             } else {
