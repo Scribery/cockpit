@@ -124,6 +124,27 @@
     }
 
     /*
+     * A component representing a username input text field.
+     * TODO make as a select / drop-down with list of exisiting users.
+    */
+    let UserPicker = class extends React.Component {
+        constructor(props) {
+            super(props);
+            this.handleUsernameChange = this.handleUsernameChange.bind(this);
+        }
+
+        handleUsernameChange(e) {
+            this.props.onUsernameChange(e.target.value);
+        }
+
+        render() {
+            return (
+                <input type="text" className="form-control" onChange={this.handleUsernameChange} />
+            );
+        }
+    }
+
+    /*
      * A component representing a single recording view.
      * Properties:
      * - recording: either null for no recording data available yet, or a
@@ -295,6 +316,12 @@
                                 <td>
                                     <Datepicker onDateChange={this.props.onDateUntilChange} />
                                 </td>
+                                <td className="top">
+                                    <label className="control-label" for="username">Username</label>
+                                </td>
+                                <td>
+                                    <UserPicker onUsernameChange={this.props.onUsernameChange} />
+                                </td>
                             </tr>
                         </table>
                     </div>
@@ -321,6 +348,7 @@
             this.journalctlIngest = this.journalctlIngest.bind(this);
             this.handleDateSinceChange = this.handleDateSinceChange.bind(this);
             this.handleDateUntilChange = this.handleDateUntilChange.bind(this);
+            this.handleUsernameChange = this.handleUsernameChange.bind(this);
             /* Journalctl instance */
             this.journalctl = null;
             /* Recording ID journalctl instance is invoked with */
@@ -334,6 +362,8 @@
                 recordingID: cockpit.location.path[0] || null,
                 dateSince: null,
                 dateUntil: null,
+                /* value to filter recordings by username */
+                username: null,
             }
         }
 
@@ -430,6 +460,9 @@
         journalctlStart() {
             /* TODO Lookup UID of "tlog" user on module init */
             let matches = ["_UID=987"];
+            if (this.state.username) {
+                matches.push("TLOG_USER=" + this.state.username);
+            }
             let options = {follow: true, count: "all", since: this.state.dateSince, until: this.state.dateUntil};
 
             if (this.state.recordingID !== null) {
@@ -491,6 +524,10 @@
             this.setState({dateUntil: date});
         }
 
+        handleUsernameChange(username) {
+            this.setState({username: username});
+        }
+
         componentDidMount() {
             this.journalctlStart();
             cockpit.addEventListener("locationchanged",
@@ -515,7 +552,9 @@
                 }
                 this.journalctlStart();
             }
-            if (this.state.dateSince != prevState.dateSince || this.state.dateUntil != prevState.dateUntil) {
+            if (this.state.dateSince != prevState.dateSince ||
+                this.state.dateUntil != prevState.dateUntil ||
+                this.state.username != prevState.username) {
                 this.clearRecordings();
                 this.journalctlRestart();
             }
@@ -527,6 +566,7 @@
                     <RecordingList
                         onDateSinceChange={this.handleDateSinceChange}
                         onDateUntilChange={this.handleDateUntilChange}
+                        onUsernameChange={this.handleUsernameChange}
                         list={this.state.recordingList} />
                 );
             } else {
