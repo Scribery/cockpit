@@ -173,9 +173,7 @@
                     "/usr/bin/tlog-play",
                     "--follow",
                     "--reader=journal",
-                    "-M", "_BOOT_ID=" + r.boot_id,
-                    "-M", "TLOG_SESSION=" + r.session_id,
-                    "-M", "_PID=" + r.pid,
+                    "-M", "TLOG_REC=" + r.id,
                 ],
                 "environ": [
                     "TERM=xterm-256color",
@@ -231,6 +229,10 @@
                     <div>
                         <h2>{_("Recording")}</h2>
                         <table>
+                            <tr>
+                                <td>{_("ID")}</td>
+                                <td>{r.id}</td>
+                            </tr>
                             <tr>
                                 <td>{_("Boot ID")}</td>
                                 <td>{r.boot_id}</td>
@@ -395,16 +397,13 @@
 
             for (i = 0; i < entryList.length; i++) {
                 let e = entryList[i];
-                let boot_id = e["_BOOT_ID"];
-                let session_id = e["TLOG_SESSION"];
-                let process_id = e["_PID"];
+                let id = e['TLOG_REC'];
 
-                /* Skip entries with missing session ID */
-                if (session_id === undefined) {
+                /* Skip entries with missing recording ID */
+                if (id === undefined) {
                     continue;
                 }
 
-                let id = boot_id + "-" + session_id + "-" + process_id;
                 let ts = Math.floor(
                             parseInt(e["__REALTIME_TIMESTAMP"], 10) /
                                 1000);
@@ -468,12 +467,7 @@
             let options = {follow: true, count: "all", since: this.state.dateSince, until: this.state.dateUntil};
 
             if (this.state.recordingID !== null) {
-                let parts = this.state.recordingID.split('-', 3);
-                matches = matches.concat([
-                            "_BOOT_ID=" + parts[0],
-                            "TLOG_SESSION=" + parts[1],
-                            "_PID=" + parts[2]
-                ]);
+                matches.push("TLOG_REC=" + this.state.recordingID);
             }
 
             this.journalctlRecordingID = this.state.recordingID;
