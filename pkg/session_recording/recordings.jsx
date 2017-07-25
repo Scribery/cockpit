@@ -355,6 +355,8 @@
             this.journalctlRecordingID = null;
             /* Recording ID -> data map */
             this.recordingMap = {};
+            /* tlog UID in system set in ComponentDidMount */
+            this.uid = null;
             this.state = {
                 /* List of recordings in start order */
                 recordingList: [],
@@ -364,6 +366,7 @@
                 dateUntil: null,
                 /* value to filter recordings by username */
                 username: null,
+                error_tlog_uid: false,
             }
         }
 
@@ -458,8 +461,7 @@
          * Assumes journalctl is not running.
          */
         journalctlStart() {
-            /* TODO Lookup UID of "tlog" user on module init */
-            let matches = ["_UID=987"];
+            let matches = ["_UID=" + this.uid];
             if (this.state.username) {
                 matches.push("TLOG_USER=" + this.state.username);
             }
@@ -529,7 +531,18 @@
         }
 
         componentDidMount() {
-            this.journalctlStart();
+            let proc = cockpit.spawn(["getent", "passwd", "tlog"]);
+
+            proc.stream((data) => {
+                this.uid = data.split(":",3)[2];
+                this.journalctlStart();
+                proc.close();
+            });
+
+            proc.fail(() => {
+                this.setState({error_tlog_uid: true});
+            });
+
             cockpit.addEventListener("locationchanged",
                                      this.onLocationChanged);
         }
@@ -561,6 +574,13 @@
         }
 
         render() {
+            if(this.state.error_tlog_uid === true) {
+                return (
+                    <div className="container-fluid">
+                        Error getting tlog uid from system.
+                    </div>
+                );
+            }
             if (this.state.recordingID === null) {
                 return (
                     <RecordingList
