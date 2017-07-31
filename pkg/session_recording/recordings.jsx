@@ -118,7 +118,10 @@
 
         render() {
             return (
-                <input ref="datepicker" className="form-control date" type="text" />
+                <div className="input-group date">
+                    <input ref="datepicker" className="form-control bootstrap-datepicker" type="text" readonly />
+                    <span className="input-group-addon"><span className="fa fa-calendar"></span></span>
+                </div>
             );
         }
     }
@@ -139,7 +142,9 @@
 
         render() {
             return (
-                <input type="text" className="form-control" onChange={this.handleUsernameChange} />
+                <div className="input-group">
+                    <input type="text" className="form-control" onChange={this.handleUsernameChange} />
+                </div>
             );
         }
     }
