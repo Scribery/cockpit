@@ -304,8 +304,8 @@
             return (
                 <div>
                     <div className="content-header-extra">
-                        <table class="form-table-ct">
-                            <tr>
+                        <table className="form-table-ct">
+                            <th>
                                 <td className="top">
                                     <label className="control-label" for="dateSince">Date Since</label>
                                 </td>
@@ -324,7 +324,7 @@
                                 <td>
                                     <UserPicker onUsernameChange={this.props.onUsernameChange} />
                                 </td>
-                            </tr>
+                            </th>
                         </table>
                     </div>
                     <Listing.Listing title={_("Sessions")}
