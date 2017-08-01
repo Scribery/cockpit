@@ -231,43 +231,70 @@
                 }
 
                 return (
-                    <div>
-                        <h2>{_("Recording")}</h2>
-                        <table>
-                            <tr>
-                                <td>{_("ID")}</td>
-                                <td>{r.id}</td>
-                            </tr>
-                            <tr>
-                                <td>{_("Boot ID")}</td>
-                                <td>{r.boot_id}</td>
-                            </tr>
-                            <tr>
-                                <td>{_("Session ID")}</td>
-                                <td>{r.session_id}</td>
-                            </tr>
-                            <tr>
-                                <td>{_("PID")}</td>
-                                <td>{r.pid}</td>
-                            </tr>
-                            <tr>
-                                <td>{_("Start")}</td>
-                                <td>{formatDateTime(r.start)}</td>
-                            </tr>
-                            <tr>
-                                <td>{_("End")}</td>
-                                <td>{formatDateTime(r.end)}</td>
-                            </tr>
-                            <tr>
-                                <td>{_("Duration")}</td>
-                                <td>{formatDuration(r.end - r.start)}</td>
-                            </tr>
-                            <tr>
-                                <td>{_("User")}</td>
-                                <td>{r.user}</td>
-                            </tr>
-                        </table>
-                        {terminal}
+                    <div className="container-fluid">
+                    <div className="row">
+                        <div className="col-md-12">
+                            <ol className="breadcrumb">
+                                <li><a>Session Recording</a></li>
+                                <li className="active">Session</li>
+                            </ol>
+                        </div>
+                    </div>
+                        <div className="row">
+                            <div className="col-md-6">
+                                <div className="panel panel-default">
+                                    <div className="panel-heading">
+                                        <span>{_("Recording")}</span>
+                                    </div>
+                                    <div className="panel-body">
+                                        <table className="form-table-ct">
+                                            <tr>
+                                                <td>{_("ID")}</td>
+                                                <td>{r.id}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>{_("Boot ID")}</td>
+                                                <td>{r.boot_id}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>{_("Session ID")}</td>
+                                                <td>{r.session_id}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>{_("PID")}</td>
+                                                <td>{r.pid}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>{_("Start")}</td>
+                                                <td>{formatDateTime(r.start)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>{_("End")}</td>
+                                                <td>{formatDateTime(r.end)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>{_("Duration")}</td>
+                                                <td>{formatDuration(r.end - r.start)}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>{_("User")}</td>
+                                                <td>{r.user}</td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="col-md-6">
+                                <div className="panel panel-default">
+                                    <div className="panel-heading">
+                                        <span>{_("Player")}</span>
+                                    </div>
+                                    <div className="panel-body">
+                                        {terminal}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 );
             }
