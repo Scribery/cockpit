@@ -158,6 +158,7 @@
     let Recording = class extends React.Component {
         constructor(props) {
             super(props);
+            this.restartPlayback = this.restartPlayback.bind(this);
             this.state = {
                 channel: null,
             };
@@ -187,6 +188,13 @@
                 "directory": "/",
                 "pty": true
             });
+        }
+
+        restartPlayback() {
+            if (this.state.channel != null) {
+                this.state.channel.close();
+            }
+            this.setState({channel: this.createChannel()});
         }
 
         componentDidMount() {
@@ -288,6 +296,10 @@
                                 <div className="panel panel-default">
                                     <div className="panel-heading">
                                         <span>{_("Player")}</span>
+                                        <div className="pull-right">
+                                            <button type="button" className="btn btn-default"
+                                                onClick={this.restartPlayback}>Restart</button>
+                                        </div>
                                     </div>
                                     <div className="panel-body">
                                         {terminal}
