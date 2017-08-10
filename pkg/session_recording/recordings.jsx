@@ -26,7 +26,7 @@
     let Journal = require("journal");
     let React = require("react");
     let Listing = require("cockpit-components-listing.jsx");
-    let Terminal = require("cockpit-components-terminal.jsx");
+    let Terminal = require("./terminal.jsx");
 
     require("bootstrap-datepicker/dist/js/bootstrap-datepicker");
 
@@ -232,11 +232,17 @@
                 if (this.state.channel) {
                     terminal = (<Terminal.Terminal
                                     ref="terminal"
-                                    cols={80} rows={24}
                                     channel={this.state.channel} />);
                 } else {
                     terminal = <span>Loading...</span>;
                 }
+
+                let style = {
+                    width: 'auto',
+                    height: 'auto',
+                    overflow: 'hidden',
+                    'min-width': '300px'
+                };
 
                 return (
                     <div className="container-fluid">
@@ -292,7 +298,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-md-6">
+                            <div className="col-md-6" style={style}>
                                 <div className="panel panel-default">
                                     <div className="panel-heading">
                                         <span>{_("Player")}</span>
@@ -302,7 +308,9 @@
                                         </div>
                                     </div>
                                     <div className="panel-body">
-                                        {terminal}
+                                        <div>
+                                            {terminal}
+                                        </div>
                                     </div>
                                 </div>
                             </div>

@@ -22,8 +22,11 @@
 
     var React = require("react");
     var Term = require("term");
+    let $ = require("jquery");
 
     require("console.css");
+    require("jquery-resizable");
+    require("jquery-resizable/resizable.css");
 
     /*
      * A terminal component that communicates over a cockpit channel.
@@ -71,6 +74,16 @@
             this.state.terminal.open(this.refs.terminal);
             this.connectChannel();
 
+            let term = this.refs.terminal;
+            let onWindowResize = this.onWindowResize;
+
+            $( function() { $(term).resizable({
+                direction: ['right', 'bottom'],
+                stop: function() {
+                    onWindowResize();
+                },
+            }); });
+
             if (!this.props.rows) {
                 window.addEventListener('resize', this.onWindowResize);
                 this.onWindowResize();
@@ -100,8 +113,12 @@
         },
 
         render: function () {
+            let style = {
+                'min-width': '300px',
+                'min-height': '100px',
+            }
             // ensure react never reuses this div by keying it with the terminal widget
-            return <div ref="terminal" className="console-ct" key={this.state.terminal} />;
+            return <div ref="terminal" style={style} className="console-ct" key={this.state.terminal} />;
         },
 
         componentWillUnmount: function () {
@@ -141,22 +158,25 @@
         },
 
         onWindowResize: function () {
-            var padding = 2 * 11;
-            var node = this.getDOMNode();
-            var terminal = this.refs.terminal.querySelector('.terminal');
+            if(this.refs) {
+                var padding = 2 * 11;
+                var node = this.getDOMNode();
+                var terminal = this.refs.terminal.querySelector('.terminal');
 
-            var ch = document.createElement('div');
-            ch.textContent = 'M';
-            terminal.appendChild(ch);
-            var height = ch.offsetHeight; // offsetHeight is only correct for block elements
-            ch.style.display = 'inline';
-            var width = ch.offsetWidth;
-            terminal.removeChild(ch);
+                var ch = document.createElement('div');
+                ch.textContent = 'M';
+                terminal.appendChild(ch);
+                var height = ch.offsetHeight; // offsetHeight is only correct for block elements
+                ch.style.display = 'inline';
+                var width = ch.offsetWidth;
+                terminal.removeChild(ch);
 
-            this.setState({
-                rows: Math.floor((node.parentElement.clientHeight - padding) / height),
-                cols: Math.floor((node.parentElement.clientWidth - padding) / width)
-            });
+                this.setState({
+                    rows: Math.floor((node.parentElement.clientHeight - padding) / height),
+                    cols: Math.floor((node.parentElement.clientWidth - padding) / width)
+                });
+            }
+            return;
         }
     });
 
