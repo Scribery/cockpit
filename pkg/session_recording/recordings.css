@@ -306,3 +306,7 @@ a.disabled {
     margin: 0px;
     white-space: pre-wrap;
 }
+
+.listing > tbody > tr {
+    cursor: pointer;
+}

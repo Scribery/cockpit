@@ -159,6 +159,7 @@
         constructor(props) {
             super(props);
             this.restartPlayback = this.restartPlayback.bind(this);
+            this.goBackToList = this.goBackToList.bind(this);
             this.state = {
                 channel: null,
             };
@@ -199,6 +200,10 @@
 
         componentDidMount() {
             this.setState({channel: this.createChannel()});
+        }
+
+        goBackToList() {
+            cockpit.location.go('/');
         }
 
         componentDidUpdate(prevProps) {
@@ -249,7 +254,7 @@
                     <div className="row">
                         <div className="col-md-12">
                             <ol className="breadcrumb">
-                                <li><a>Session Recording</a></li>
+                                <li><a onClick={this.goBackToList}>Session Recording</a></li>
                                 <li className="active">Session</li>
                             </ol>
                         </div>
@@ -623,7 +628,7 @@
             if(this.state.error_tlog_uid === true) {
                 return (
                     <div className="container-fluid">
-                        Error getting tlog uid from system.
+                        Error getting tlog UID from system.
                     </div>
                 );
             }
