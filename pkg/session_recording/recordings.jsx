@@ -119,7 +119,8 @@
         render() {
             return (
                 <div className="input-group date">
-                    <input ref="datepicker" className="form-control bootstrap-datepicker" type="text" readonly />
+                    <input ref="datepicker" className="form-control bootstrap-datepicker" type="text" readonly
+                        value={this.props.date} />
                     <span className="input-group-addon"><span className="fa fa-calendar"></span></span>
                 </div>
             );
@@ -143,7 +144,8 @@
         render() {
             return (
                 <div className="input-group">
-                    <input type="text" className="form-control" onChange={this.handleUsernameChange} />
+                    <input type="text" className="form-control" value={this.props.username}
+                        onChange={this.handleUsernameChange} />
                 </div>
             );
         }
@@ -203,7 +205,11 @@
         }
 
         goBackToList() {
-            cockpit.location.go('/');
+            if (cockpit.location.path[0]) {
+                cockpit.location.go([], cockpit.location.options);
+            } else {
+                cockpit.location.go('/');
+            }
         }
 
         componentDidUpdate(prevProps) {
@@ -340,7 +346,7 @@
          * Set the cockpit location to point to the specified recording.
          */
         navigateToRecording(recording) {
-            cockpit.location.go([recording.id]);
+            cockpit.location.go([recording.id], cockpit.location.options);
         }
 
         render() {
@@ -367,19 +373,22 @@
                                     <label className="control-label" for="dateSince">Date Since</label>
                                 </td>
                                 <td>
-                                    <Datepicker onDateChange={this.props.onDateSinceChange} />
+                                    <Datepicker onDateChange={this.props.onDateSinceChange}
+                                        date={this.props.dateSince} />
                                 </td>
                                 <td className="top">
                                     <label className="control-label" for="dateUntil">Date Until</label>
                                 </td>
                                 <td>
-                                    <Datepicker onDateChange={this.props.onDateUntilChange} />
+                                    <Datepicker onDateChange={this.props.onDateUntilChange}
+                                        date={this.props.dateUntil}/>
                                 </td>
                                 <td className="top">
                                     <label className="control-label" for="username">Username</label>
                                 </td>
                                 <td>
-                                    <UserPicker onUsernameChange={this.props.onUsernameChange} />
+                                    <UserPicker onUsernameChange={this.props.onUsernameChange}
+                                        username={this.props.username} />
                                 </td>
                             </th>
                         </table>
@@ -421,10 +430,10 @@
                 recordingList: [],
                 /* ID of the recording to display, or null for all */
                 recordingID: cockpit.location.path[0] || null,
-                dateSince: null,
-                dateUntil: null,
+                dateSince: cockpit.location.options.dateSince || null,
+                dateUntil: cockpit.location.options.dateUntil || null,
                 /* value to filter recordings by username */
-                username: null,
+                username: cockpit.location.options.username || null,
                 error_tlog_uid: false,
             }
         }
@@ -441,7 +450,12 @@
          * displayed recording ID.
          */
         onLocationChanged() {
-            this.setState({recordingID: cockpit.location.path[0] || null});
+            this.setState({
+                recordingID: cockpit.location.path[0] || null,
+                dateSince: cockpit.location.options.dateSince || null,
+                dateUntil: cockpit.location.options.dateUntil || null,
+                username: cockpit.location.options.username || null,
+            });
         }
 
         /*
@@ -570,15 +584,15 @@
         }
 
         handleDateSinceChange(date) {
-            this.setState({dateSince: date});
+            cockpit.location.go([], $.extend(cockpit.location.options, { dateSince: date }));
         }
 
         handleDateUntilChange(date) {
-            this.setState({dateUntil: date});
+            cockpit.location.go([], $.extend(cockpit.location.options, { dateUntil: date }));
         }
 
         handleUsernameChange(username) {
-            this.setState({username: username});
+            cockpit.location.go([], $.extend(cockpit.location.options, { username: username }));
         }
 
         componentDidMount() {
@@ -635,9 +649,9 @@
             if (this.state.recordingID === null) {
                 return (
                     <RecordingList
-                        onDateSinceChange={this.handleDateSinceChange}
-                        onDateUntilChange={this.handleDateUntilChange}
-                        onUsernameChange={this.handleUsernameChange}
+                        onDateSinceChange={this.handleDateSinceChange} dateSince={this.state.dateSince}
+                        onDateUntilChange={this.handleDateUntilChange} dateUntil={this.state.dateUntil}
+                        onUsernameChange={this.handleUsernameChange} username={this.state.username}
                         list={this.state.recordingList} />
                 );
             } else {
