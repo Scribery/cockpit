@@ -161,9 +161,19 @@
         constructor(props) {
             super(props);
             this.restartPlayback = this.restartPlayback.bind(this);
+            this.playPauseToggle = this.playPauseToggle.bind(this);
+            this.speedUp = this.speedUp.bind(this);
+            this.speedDown = this.speedDown.bind(this);
+            this.speedReset = this.speedReset.bind(this);
             this.goBackToList = this.goBackToList.bind(this);
+            this.sendToTerm = this.sendToTerm.bind(this);
+            this.fastForwardToEnd = this.fastForwardToEnd.bind(this);
+            this.skipFrame = this.skipFrame.bind(this);
+            this.handleKeyDown = this.handleKeyDown.bind(this);
             this.state = {
                 channel: null,
+                paused: true,
+                speed_exp: 0,
             };
         }
 
@@ -176,14 +186,20 @@
             if (!r) {
                 return null;
             }
+            let spawn = [
+                "/usr/bin/tlog-play",
+                "--persist",
+                "--follow",
+                "--reader=journal",
+                "-M", "TLOG_REC=" + r.id,
+                "--speed=" + Math.pow(2, this.state.speed_exp),
+            ];
+            if (this.state.paused) {
+                spawn.push("--paused");
+            }
             return cockpit.channel({
                 "payload": "stream",
-                "spawn": [
-                    "/usr/bin/tlog-play",
-                    "--follow",
-                    "--reader=journal",
-                    "-M", "TLOG_REC=" + r.id,
-                ],
+                "spawn": spawn,
                 "environ": [
                     "TERM=xterm-256color",
                     "PATH=/sbin:/bin:/usr/sbin:/usr/bin"
@@ -193,11 +209,69 @@
             });
         }
 
+        sendToTerm(value) {
+            this.refs.terminal.send(value);
+        }
+
+        playPauseToggle() {
+            this.setState({paused: !this.state.paused});
+            this.sendToTerm(' ');
+        }
+
+        speedUp() {
+            let speed_exp = this.state.speed_exp;
+            if (speed_exp < 4) {
+                this.setState({speed_exp: speed_exp + 1});
+                this.sendToTerm('}');
+            }
+        }
+
+        speedDown() {
+            let speed_exp = this.state.speed_exp;
+            if (speed_exp > -4) {
+                this.setState({speed_exp: speed_exp - 1});
+                this.sendToTerm('{');
+            }
+        }
+
+        speedReset() {
+            this.setState({speed_exp: 0});
+            // Backspace
+            this.sendToTerm('\x7f');
+        }
+
         restartPlayback() {
             if (this.state.channel != null) {
                 this.state.channel.close();
             }
             this.setState({channel: this.createChannel()});
+        }
+
+        fastForwardToEnd() {
+            this.sendToTerm('G');
+        }
+
+        skipFrame() {
+            this.sendToTerm('.');
+        }
+
+        handleKeyDown(event) {
+            let keyCodesFuncs = {
+                "p": this.playPauseToggle,
+                "}": this.speedUp,
+                "{": this.speedDown,
+                "Backspace": this.speedReset,
+                ".": this.skipFrame,
+                "G": this.fastForwardToEnd,
+                "R": this.restartPlayback,
+            };
+            if (keyCodesFuncs[event.key]) {
+                (keyCodesFuncs[event.key](event));
+            }
+        }
+
+        componentWillMount() {
+            window.addEventListener("keydown", this.handleKeyDown, false);
         }
 
         componentDidMount() {
@@ -228,6 +302,7 @@
         }
 
         componentWillUnmount() {
+            window.removeEventListener("keydown", this.handleKeyDown, false);
             if (this.state.channel != null) {
                 this.state.channel.close();
             }
@@ -254,6 +329,18 @@
                     overflow: 'hidden',
                     'min-width': '300px'
                 };
+
+                let speed = (() => {
+                    let exp = this.state.speed_exp;
+                    let factor = Math.pow(2, Math.abs(exp));
+                    if (exp > 0) {
+                        return 'x' + factor;
+                    } else if (exp < 0) {
+                        return '/' + factor;
+                    } else {
+                        return '';
+                    }
+                })();
 
                 return (
                     <div className="container-fluid">
@@ -313,15 +400,38 @@
                                 <div className="panel panel-default">
                                     <div className="panel-heading">
                                         <span>{_("Player")}</span>
-                                        <div className="pull-right">
-                                            <button type="button" className="btn btn-default"
-                                                onClick={this.restartPlayback}>Restart</button>
-                                        </div>
                                     </div>
                                     <div className="panel-body">
                                         <div>
                                             {terminal}
                                         </div>
+                                    </div>
+                                    <div className="panel-footer">
+                                            <button title="Play/Pause - Hotkey: p" type="button" ref="playbtn"
+                                                className="btn btn-default btn-lg margin-right-btn play-btn"
+                                                onClick={this.playPauseToggle}>
+                                                <i className={"fa fa-" + (this.state.paused ? "play" : "pause")}
+                                                    aria-hidden="true"></i>
+                                                </button>
+                                            <button title="Skip Frame - Hotkey: ." type="button"
+                                                className="btn btn-default btn-lg margin-right-btn"
+                                                onClick={this.skipFrame}>
+                                                <i className="fa fa-step-forward" aria-hidden="true"></i></button>
+                                            <button title="Restart Playback - Hotkey: Shift-R" type="button"
+                                                className="btn btn-default btn-lg" onClick={this.restartPlayback}>
+                                                <i className="fa fa-fast-backward" aria-hidden="true"></i></button>
+                                            <button title="Fast-forward to end - Hotkey: Shift-G" type="button"
+                                                className="btn btn-default btn-lg margin-right-btn"
+                                                onClick={this.fastForwardToEnd}>
+                                                <i className="fa fa-fast-forward" aria-hidden="true"></i></button>
+                                            <button title="Speed /2 - Hotkey: {" type="button"
+                                            className="btn btn-default btn-lg" onClick={this.speedDown}>/2</button>
+                                            <button title="Reset Speed - Hotkey: Backspace" type="button"
+                                            className="btn btn-default btn-lg" onClick={this.speedReset}>1:1</button>
+                                            <button title="Speed x2 - Hotkey: }" type="button"
+                                                className="btn btn-default btn-lg margin-right-btn"
+                                                onClick={this.speedUp}>x2</button>
+                                            <span>{speed}</span>
                                     </div>
                                 </div>
                             </div>

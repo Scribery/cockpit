@@ -177,6 +177,10 @@
                 });
             }
             return;
+        },
+
+        send: function(value) {
+            this.state.terminal.send(value);
         }
     });
 

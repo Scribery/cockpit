@@ -310,3 +310,11 @@ a.disabled {
 .listing > tbody > tr {
     cursor: pointer;
 }
+
+.margin-right-btn {
+    margin-right: 10px;
+}
+
+.play-btn {
+    min-width: 34px;
+}
