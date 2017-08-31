@@ -127,7 +127,9 @@
         },
 
         onChannelMessage: function (event, data) {
-            this.state.terminal.write(data);
+            if(this.state.terminal) {
+                this.state.terminal.write(data);
+            }
         },
 
         onChannelClose: function (event, options) {
