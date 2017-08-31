@@ -127,7 +127,7 @@
         },
 
         onChannelMessage: function (event, data) {
-            if(this.state.terminal) {
+            if (this.state.terminal) {
                 this.state.terminal.write(data);
             }
         },
@@ -160,7 +160,7 @@
         },
 
         onWindowResize: function () {
-            if(this.refs) {
+            if (this.refs) {
                 var padding = 2 * 11;
                 var node = this.getDOMNode();
                 var terminal = this.refs.terminal.querySelector('.terminal');

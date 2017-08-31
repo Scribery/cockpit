@@ -749,7 +749,7 @@
         }
 
         render() {
-            if(this.state.error_tlog_uid === true) {
+            if (this.state.error_tlog_uid === true) {
                 return (
                     <div className="container-fluid">
                         Error getting tlog UID from system.
