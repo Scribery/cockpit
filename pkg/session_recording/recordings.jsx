@@ -340,6 +340,7 @@
     let RecordingList = class extends React.Component {
         constructor(props) {
             super(props);
+            this.createUrl = this.createUrl.bind(this);
         }
 
         /*
@@ -349,16 +350,22 @@
             cockpit.location.go([recording.id], cockpit.location.options);
         }
 
+        createUrl(recording) {
+            let url = cockpit.location.encode([recording.id], cockpit.location.options);
+            return window.location.origin + "/session_recording#" + url;
+        }
+
         render() {
             let columnTitles = [_("User"), _("Start"), _("End"), _("Duration")];
             let list = this.props.list;
             let rows = [];
             for (let i = 0; i < list.length; i++) {
                 let r = list[i];
-                let columns = [r.user,
-                               formatDateTime(r.start),
-                               formatDateTime(r.end),
-                               formatDuration(r.end - r.start)];
+                let url = this.createUrl(r);
+                let columns = [(<a href={url}>{r.user}</a>),
+                               (<a href={url}>{formatDateTime(r.start)}</a>),
+                               (<a href={url}>{formatDateTime(r.end)}</a>),
+                               (<a href={url}>{formatDuration(r.end - r.start)}</a>)];
                 rows.push(<Listing.ListingRow
                             rowId={r.id}
                             columns={columns}
