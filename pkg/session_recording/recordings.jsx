@@ -450,6 +450,52 @@
     let RecordingList = class extends React.Component {
         constructor(props) {
             super(props);
+            this.handleColumnClick = this.handleColumnClick.bind(this);
+            this.getSortedList = this.getSortedList.bind(this);
+            this.drawSortDir = this.drawSortDir.bind(this);
+            this.state = {
+                sorting_field: "start",
+                sorting_asc: true,
+            };
+        }
+
+        drawSortDir() {
+            $('#sort_arrow').remove();
+            let type = this.state.sorting_asc ? "asc" : "desc";
+            let arrow = '<i id="sort_arrow" class="fa fa-sort-' + type + '" aria-hidden="true"></i>';
+            $(this.refs[this.state.sorting_field]).append(arrow);
+        }
+
+        handleColumnClick(event) {
+            if(this.state.sorting_field === event.currentTarget.id) {
+                this.setState({sorting_asc: !this.state.sorting_asc});
+            }
+            else {
+                this.setState({
+                    sorting_field: event.currentTarget.id,
+                    sorting_asc: 'asc'
+                });
+            }
+        }
+
+        getSortedList() {
+            let field = this.state.sorting_field;
+            let asc = this.state.sorting_asc;
+            let list = this.props.list.slice();
+
+            if (this.state.sorting_field != null) {
+                if (asc) {
+                    list.sort(function(a, b) {
+                        return a[field] > b[field];
+                    });
+                } else {
+                    list.sort(function(a, b) {
+                        return a[field] < b[field];
+                    });
+                }
+            }
+
+            return list;
         }
 
         /*
@@ -459,10 +505,24 @@
             cockpit.location.go([recording.id], cockpit.location.options);
         }
 
+        componentDidUpdate() {
+            this.drawSortDir();
+        }
+
         render() {
-            let columnTitles = [_("User"), _("Start"), _("End"), _("Duration")];
-            let list = this.props.list;
+            let columnTitles = [
+                (<div id="user" className="sort" onClick={this.handleColumnClick}><span>{_("User")}</span> <div
+                    ref="user" className="sort-icon"></div></div>),
+                (<div id="start" className="sort" onClick={this.handleColumnClick}><span>{_("Start")}</span> <div
+                    ref="start" className="sort-icon"></div></div>),
+                (<div id="end" className="sort" onClick={this.handleColumnClick}><span>{_("End")}</span> <div
+                    ref="end" className="sort-icon"></div></div>),
+                (<div id="duration" className="sort" onClick={this.handleColumnClick}><span>{_("Duration")}</span> <div
+                    ref="duration" className="sort-icon"></div></div>),
+            ];
+            let list = this.getSortedList();
             let rows = [];
+
             for (let i = 0; i < list.length; i++) {
                 let r = list[i];
                 let columns = [r.user,
@@ -600,7 +660,8 @@
                          pid:           parseInt(e["_PID"], 10),
                          start:         ts,
                          /* FIXME Should be start + message duration */
-                         end:       ts};
+                         end:       ts,
+                         duration:  0};
                     /* Map the recording */
                     this.recordingMap[id] = r;
                     /* Insert the recording in order */
@@ -612,9 +673,11 @@
                     /* Adjust existing recording */
                     if (ts > r.end) {
                         r.end = ts;
+                        r.duration = r.end - r.start;
                     }
                     if (ts < r.start) {
                         r.start = ts;
+                        r.duration = r.end - r.start;
                         /* Find the recording in the list */
                         for (j = recordingList.length - 1;
                              j >= 0 && recordingList[j] != r;

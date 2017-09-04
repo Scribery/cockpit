@@ -318,3 +318,20 @@ a.disabled {
 .play-btn {
     min-width: 34px;
 }
+
+.sort {
+    cursor: pointer;
+}
+
+.sort span {
+    text-decoration: underline;
+}
+
+.sort-icon {
+    width:7px;
+    display:inline-block;
+}
+
+table.listing-ct > thead th:last-child, tr.listing-ct-item td:last-child {
+    text-align: left !important;
+}
