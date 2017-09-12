@@ -242,7 +242,7 @@
 
         restartPlayback() {
             if (this.state.channel != null) {
-                this.state.channel.close();
+                this.state.channel.close("terminated");
             }
             this.setState({channel: this.createChannel()});
         }
@@ -290,7 +290,7 @@
             if (this.props.recording != prevProps.recording) {
                 let channel;
                 if (this.state.channel != null) {
-                    this.state.channel.close();
+                    this.state.channel.close("terminated");
                 }
                 if (this.props.recording == null) {
                     channel = null;
@@ -304,7 +304,7 @@
         componentWillUnmount() {
             window.removeEventListener("keydown", this.handleKeyDown, false);
             if (this.state.channel != null) {
-                this.state.channel.close();
+                this.state.channel.close("terminated");
             }
         }
 
