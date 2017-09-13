@@ -43,7 +43,7 @@
         for (w -= s.length; w > 0; w--) {
             s = '0' + s;
         }
-        return ((a < 0) ? '-' : '') + s;
+        return ((i < 0) ? '-' : '') + s;
     }
 
     /*
