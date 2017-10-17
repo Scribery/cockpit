@@ -23,12 +23,14 @@
     let $ = require("jquery");
     let cockpit = require("cockpit");
     let _ = cockpit.gettext;
+    let moment = require("moment");
     let Journal = require("journal");
     let React = require("react");
     let Listing = require("cockpit-components-listing.jsx");
     let Player = require("./player.jsx");
 
-    require("bootstrap-datepicker/dist/js/bootstrap-datepicker");
+    require("bootstrap-datetime-picker/js/bootstrap-datetimepicker.js");
+    require("bootstrap-datetime-picker/css/bootstrap-datetimepicker.css");
 
     /*
      * Convert a number to integer number string and pad with zeroes to
@@ -85,43 +87,113 @@
         return (ms < 0 ? '-' : '') + str;
     };
 
+    let parseDate = function(date) {
+        let regex = new RegExp(/^\s*(\d\d\d\d-\d\d-\d\d)(\s+(\d\d:\d\d(:\d\d)?))?\s*$/);
+
+        let captures = regex.exec(date);
+
+        if (captures != null)
+        {
+            let date = captures[1];
+            if (captures[3]) {
+                date = date + " " + captures[3];
+            }
+            if (moment(date, ["YYYY-M-D H:m:s", "YYYY-M-D H:m", "YYYY-M-D"], true).isValid()) {
+                return date;
+            }
+        }
+
+        if (date === "" || date === null) {
+            return true;
+        }
+
+        return false;
+    }
+
     /*
-     * A component representing a datepicker based on bootstrap-datepicker.
-     * Requires jQuery and bootstrap-datepicker.
+     * A component representing a date & time picker based on bootstrap-datetime-picker.
+     * Requires jQuery, bootstrap-datetime-picker, moment.js
      * Properties:
      * - onDateChange: function to call on date change event of datepicker.
+     * - date: variable to pass which will be used as initial value.
      */
-    let Datepicker = class extends React.Component {
+    let Datetimepicker = class extends React.Component {
         constructor(props) {
             super(props);
             this.handleDateChange = this.handleDateChange.bind(this);
+            this.clearField = this.clearField.bind(this);
+            this.markDateField = this.markDateField.bind(this);
+            this.state = {
+                invalid: false,
+                date: this.props.date,
+                dateLastValid: null,
+            };
         }
 
         componentDidMount() {
             let funcDate = this.handleDateChange;
-            $(this.refs.datepicker).datepicker({
+            let datepicker = $(this.refs.datepicker).datetimepicker({
+                format: 'yyyy-mm-dd hh:ii:00',
                 autoclose: true,
-                todayHighlight: true,
-                format: 'yyyy-mm-dd',
-            }).on('changeDate', function(e) {
+                todayBtn: true,
+            });
+            datepicker.on('changeDate', function(e) {
                 funcDate(e);
             });
+            $(this.refs.datepicker_input).datetimepicker('remove');
+            this.markDateField();
         }
 
         componentWillUnmount() {
-            $(this.textInput).datepicker('destroy');
+            $(this.textInput).datetimepicker('remove');
         }
 
         handleDateChange(e) {
-            this.props.onDateChange(e.target.value);
+            if (e.type === "changeDate") {
+                let event = new Event('input', { bubbles: true });
+                e.currentTarget.firstChild.dispatchEvent(event);
+            }
+
+            if (e.type === "input") {
+                this.setState({date: e.target.value});
+                if (parseDate(e.target.value)) {
+                    this.setState({dateLastValid: e.target.value});
+                    this.setState({invalid: false});
+                    this.props.onDateChange(e.target.value, e.target.value.trim());
+                } else {
+                    this.setState({invalid: true});
+                    this.props.onDateChange(e.target.value, this.state.dateLastValid.trim());
+                }
+            }
+        }
+
+        clearField() {
+            $(this.refs.datepicker_input).val("");
+            let event = new Event('input', { bubbles: true });
+            this.refs.datepicker_input.dispatchEvent(event);
+            this.handleDateChange(event);
+            this.setState({invalid: false});
+        }
+
+        markDateField() {
+            let date = $(this.refs.datepicker_input).val().trim();
+            if (!parseDate(date)) {
+                this.setState({invalid: true});
+            } else {
+                this.setState({dateLastValid: date});
+                this.setState({invalid: false});
+            }
         }
 
         render() {
             return (
-                <div className="input-group date">
-                    <input ref="datepicker" className="form-control bootstrap-datepicker" type="text" readonly
-                        value={this.props.date} />
-                    <span className="input-group-addon"><span className="fa fa-calendar"></span></span>
+                <div ref="datepicker" className="input-group date input-append date form_datetime">
+                    <input ref="datepicker_input" type="text" size="16"
+                        className={"form-control bootstrap-datepicker " + (this.state.invalid ? "invalid" : "valid")}
+                        readonly value={this.state.date} onChange={this.handleDateChange} />
+                        <span className="input-group-addon add-on"><i className="fa fa-calendar"></i></span>
+                        <span className="input-group-addon add-on" onClick={this.clearField}>
+                            <i className="fa fa-remove"></i></span>
                 </div>
             );
         }
@@ -350,17 +422,17 @@
                         <table className="form-table-ct">
                             <th>
                                 <td className="top">
-                                    <label className="control-label" for="dateSince">Date Since</label>
+                                    <label className="control-label" for="dateSince">Since</label>
                                 </td>
                                 <td>
-                                    <Datepicker onDateChange={this.props.onDateSinceChange}
+                                    <Datetimepicker onDateChange={this.props.onDateSinceChange}
                                         date={this.props.dateSince} />
                                 </td>
                                 <td className="top">
-                                    <label className="control-label" for="dateUntil">Date Until</label>
+                                    <label className="control-label" for="dateUntil">Until</label>
                                 </td>
                                 <td>
-                                    <Datepicker onDateChange={this.props.onDateUntilChange}
+                                    <Datetimepicker onDateChange={this.props.onDateUntilChange}
                                         date={this.props.dateUntil}/>
                                 </td>
                                 <td className="top">
@@ -411,7 +483,9 @@
                 /* ID of the recording to display, or null for all */
                 recordingID: cockpit.location.path[0] || null,
                 dateSince: cockpit.location.options.dateSince || null,
+                dateSinceLastValid: null,
                 dateUntil: cockpit.location.options.dateUntil || null,
+                dateUntilLastValid: null,
                 /* value to filter recordings by username */
                 username: cockpit.location.options.username || null,
                 error_tlog_uid: false,
@@ -520,7 +594,16 @@
             if (this.state.username) {
                 matches.push("TLOG_USER=" + this.state.username);
             }
-            let options = {follow: true, count: "all", since: this.state.dateSince, until: this.state.dateUntil};
+
+            let options = {follow: true, count: "all"};
+
+            if (this.state.dateSinceLastValid) {
+                options['since'] = this.state.dateSinceLastValid;
+            }
+
+            if (this.state.dateUntil) {
+                options['until'] = this.state.dateUntilLastValid;
+            }
 
             if (this.state.recordingID !== null) {
                 matches.push("TLOG_REC=" + this.state.recordingID);
@@ -568,11 +651,13 @@
             this.setState({recordingList: []});
         }
 
-        handleDateSinceChange(date) {
+        handleDateSinceChange(date, last_valid) {
+            this.setState({dateSinceLastValid: last_valid});
             cockpit.location.go([], $.extend(cockpit.location.options, { dateSince: date }));
         }
 
-        handleDateUntilChange(date) {
+        handleDateUntilChange(date, last_valid) {
+            this.setState({dateUntilLastValid: last_valid});
             cockpit.location.go([], $.extend(cockpit.location.options, { dateUntil: date }));
         }
 
@@ -592,6 +677,18 @@
             proc.fail(() => {
                 this.setState({error_tlog_uid: true});
             });
+
+            let dateSince = parseDate(this.state.dateSince);
+
+            if (dateSince && dateSince != true) {
+                this.setState({dateSinceLastValid: dateSince});
+            }
+
+            let dateUntil = parseDate(this.state.dateUntil);
+
+            if (dateUntil && dateUntil != true) {
+                this.setState({dateUntilLastValid: dateUntil});
+            }
 
             cockpit.addEventListener("locationchanged",
                                      this.onLocationChanged);
@@ -615,9 +712,10 @@
                 }
                 this.journalctlStart();
             }
-            if (this.state.dateSince != prevState.dateSince ||
-                this.state.dateUntil != prevState.dateUntil ||
-                this.state.username != prevState.username) {
+            if (this.state.dateSinceLastValid != prevState.dateSinceLastValid ||
+                this.state.dateUntilLastValid != prevState.dateUntilLastValid ||
+                this.state.username != prevState.username
+            ) {
                 this.clearRecordings();
                 this.journalctlRestart();
             }

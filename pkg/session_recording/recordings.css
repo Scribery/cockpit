@@ -335,3 +335,15 @@ a.disabled {
 table.listing-ct > thead th:last-child, tr.listing-ct-item td:last-child {
     text-align: left !important;
 }
+
+.date {
+    width: 185px;
+}
+
+.invalid {
+    background-color: #ffdddd;
+}
+
+.valid {
+    background-color: #ffffff;
+}
