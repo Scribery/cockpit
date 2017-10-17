@@ -254,10 +254,9 @@
                         matchList={this.props.recording.matchList} />);
 
                 let style = {
-                    width: 'auto',
+                    width: '672.97px',
                     height: 'auto',
                     overflow: 'hidden',
-                    'min-width': '300px'
                 };
 
                 return (
