@@ -464,16 +464,21 @@
             this.fastForwardToEnd = this.fastForwardToEnd.bind(this);
             this.skipFrame = this.skipFrame.bind(this);
             this.handleKeyDown = this.handleKeyDown.bind(this);
+            this.sync = this.sync.bind(this);
 
             this.state = {
-                cols:       80,
-                rows:       25,
-                title:      _("Player"),
-                term:       null,
-                paused:     true,
+                cols:           80,
+                rows:           25,
+                title:          _("Player"),
+                term:           null,
+                paused:         true,
                 /* Speed exponent */
-                speedExp:   0,
+                speedExp:       0,
+                containerWidth: 630,
+                scale:          1
             };
+
+            this.containerHeight = 290;
 
             /* Auto-loading buffer of recording's packets */
             this.buf = new PacketBuffer(this.props.matchList);
@@ -543,6 +548,9 @@
         }
 
         componentDidMount() {
+            if (this.refs.wrapper.offsetWidth) {
+                this.setState({containerWidth: this.refs.wrapper.offsetWidth});
+            }
             /* Open the terminal */
             this.state.term.open(this.refs.term);
             /* Reset playback */
@@ -591,6 +599,18 @@
             this.setState({ title: _("Player") + ": " + title });
         }
 
+        _transform(width, height) {
+            var relation = Math.min(
+              this.state.containerWidth / this.state.term.element.offsetWidth,
+              this.containerHeight / this.state.term.element.offsetHeight
+            );
+            this.setState({
+                scale: relation,
+                cols: width,
+                rows: height
+            });
+        }
+
         /* Synchronize playback */
         sync() {
             let locDelay;
@@ -619,7 +639,7 @@
                     }
 
                     /* Skip packets we don't output */
-                    if (!pkt.is_io || !pkt.is_output) {
+                    if (pkt.is_io && !pkt.is_output) {
                         continue;
                     }
 
@@ -669,7 +689,12 @@
                 }
 
                 /* Output the packet */
-                this.state.term.write(this.pkt.io);
+                if (this.pkt.is_io) {
+                    this.state.term.write(this.pkt.io);
+                } else {
+                    this.state.term.resize(this.pkt.width, this.pkt.height);
+                    this._transform(this.pkt.width, this.pkt.height);
+                }
 
                 /* We no longer have a packet */
                 this.pkt = null;
@@ -758,14 +783,34 @@
                 speedStr = "";
             }
 
+            const style = {
+                "transform": "scale(" + this.state.scale + ") translate(-50%, -50%)",
+                "transform-origin": "top left",
+                "display": "inline-block",
+                "margin": "0 auto",
+                "position": "absolute",
+                "top": "50%",
+                "left": "50%",
+            };
+
+            const scrollwrap = {
+                "min-width": "630px",
+                "height": this.containerHeight + "px",
+                "background-color": "#f5f5f5",
+                "overflow": "hidden",
+                "position": "relative",
+            };
+
             // ensure react never reuses this div by keying it with the terminal widget
             return (
-                <div className="panel panel-default">
+                <div ref="wrapper" className="panel panel-default">
                     <div className="panel-heading">
                         <span>{this.state.title}</span>
                     </div>
                     <div className="panel-body">
-                        <div ref="term" className="console-ct" key={this.state.term} />
+                        <div style={scrollwrap}>
+                            <div ref="term" className="console-ct" key={this.state.term} style={style} />
+                        </div>
                     </div>
                     <div className="panel-footer">
                         <button title="Play/Pause - Hotkey: p" type="button" ref="playbtn"

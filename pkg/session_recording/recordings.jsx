@@ -253,12 +253,6 @@
                         ref="player"
                         matchList={this.props.recording.matchList} />);
 
-                let style = {
-                    width: '672.97px',
-                    height: 'auto',
-                    overflow: 'hidden',
-                };
-
                 return (
                     <div className="container-fluid">
                     <div className="row">
@@ -313,7 +307,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div className="col-md-6" style={style}>
+                            <div className="col-md-6 player-wrap">
                                 {player}
                             </div>
                         </div>
