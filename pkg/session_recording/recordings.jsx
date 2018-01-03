@@ -250,6 +250,7 @@
             } else {
                 let player =
                     (<Player.Player
+                        journalctl={this.props.journalctl}
                         ref="player"
                         matchList={this.props.recording.matchList} />);
 
@@ -658,7 +659,7 @@
             cockpit.location.go([], $.extend(cockpit.location.options, { username: username }));
         }
 
-        componentDidMount() {
+        componentWillMount() {
             let proc = cockpit.spawn(["getent", "passwd", "tlog"]);
 
             proc.stream((data) => {
@@ -693,7 +694,7 @@
             }
         }
 
-        componentDidUpdate(prevProps, prevState) {
+        componentWillUpdate(prevProps, prevState) {
             /*
              * If we're running a specific (non-wildcard) journalctl
              * and recording ID has changed
@@ -732,7 +733,7 @@
                 );
             } else {
                 return (
-                    <Recording recording={this.recordingMap[this.state.recordingID]} />
+                    <Recording journalctl={this.journalctl} recording={this.recordingMap[this.state.recordingID]} />
                 );
             }
         }

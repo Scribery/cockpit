@@ -51,7 +51,7 @@
         /*
          * Initialize a buffer.
          */
-        constructor(matchList) {
+        constructor(matchList, journalctl) {
             this.handleError = this.handleError.bind(this);
             this.handleStream = this.handleStream.bind(this);
             this.handleDone = this.handleDone.bind(this);
@@ -99,9 +99,7 @@
             /* Error which stopped the loading */
             this.error = null;
             /* The journalctl reading the recording */
-            this.journalctl = Journal.journalctl(
-                                this.matchList,
-                                {count: "all", follow: false});
+            this.journalctl = journalctl;
             this.journalctl.fail(this.handleError);
             this.journalctl.stream(this.handleStream);
             this.journalctl.done(this.handleDone);
@@ -481,7 +479,7 @@
             this.containerHeight = 290;
 
             /* Auto-loading buffer of recording's packets */
-            this.buf = new PacketBuffer(this.props.matchList);
+            this.buf = new PacketBuffer(this.props.matchList, this.props.journalctl);
 
             /* Current recording time, ms */
             this.recTS = 0;
@@ -861,7 +859,9 @@
 
     Player.propTypes = {
         matchList: React.PropTypes.array,
-        onTitleChanged: React.PropTypes.func
+        onTitleChanged: React.PropTypes.func,
+        journalctl: React.PropTypes.func,
+
     };
 
     module.exports = { Player: Player };
