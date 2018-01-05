@@ -475,7 +475,8 @@
                 /* Speed exponent */
                 speedExp:       0,
                 containerWidth: 630,
-                scale:          1
+                scale:          1,
+                error:          null
             };
 
             this.containerHeight = 290;
@@ -579,6 +580,7 @@
         /* Handle packet retrieval error */
         handleError(error) {
             if (error !== null) {
+                this.setState({error: error});
                 console.warn(error);
             }
         }
@@ -801,53 +803,68 @@
                 "position": "relative",
             };
 
+            let error = "";
+            if (this.state.error) {
+                error = (
+                    <div className="alert alert-danger alert-dismissable" >
+                        <button type="button" className="close" data-dismiss="alert" aria-hidden="true">
+                            <span className="pficon pficon-close" />
+                        </button>
+                        <span className="pficon pficon-error-circle-o" />
+                        {this.state.error}.
+                    </div>);
+            }
+
             // ensure react never reuses this div by keying it with the terminal widget
             return (
-                <div ref="wrapper" className="panel panel-default">
-                    <div className="panel-heading">
-                        <span>{this.state.title}</span>
-                    </div>
-                    <div className="panel-body">
-                        <div style={scrollwrap}>
-                            <div ref="term" className="console-ct" key={this.state.term} style={style} />
+                <div>
+                    <div ref="wrapper" className="panel panel-default">
+                        <div className="panel-heading">
+                            <span>{this.state.title}</span>
+                        </div>
+                        <div className="panel-body">
+                            <div style={scrollwrap}>
+                                <div ref="term" className="console-ct" key={this.state.term} style={style} />
+                            </div>
+                        </div>
+                        <div className="panel-footer">
+                            <button title="Play/Pause - Hotkey: p" type="button" ref="playbtn"
+                                    className="btn btn-default btn-lg margin-right-btn play-btn"
+                                    onClick={this.playPauseToggle}>
+                                <i className={"fa fa-" + (this.state.paused ? "play" : "pause")}
+                                   aria-hidden="true" />
+                            </button>
+                            <button title="Skip Frame - Hotkey: ." type="button"
+                                    className="btn btn-default btn-lg margin-right-btn"
+                                    onClick={this.skipFrame}>
+                                <i className="fa fa-step-forward" aria-hidden="true" />
+                            </button>
+                            <button title="Restart Playback - Hotkey: Shift-R" type="button"
+                                    className="btn btn-default btn-lg" onClick={this.rewindToStart}>
+                                <i className="fa fa-fast-backward" aria-hidden="true" />
+                            </button>
+                            <button title="Fast-forward to end - Hotkey: Shift-G" type="button"
+                                    className="btn btn-default btn-lg margin-right-btn"
+                                    onClick={this.fastForwardToEnd}>
+                                <i className="fa fa-fast-forward" aria-hidden="true" />
+                            </button>
+                            <button title="Speed /2 - Hotkey: {" type="button"
+                                    className="btn btn-default btn-lg" onClick={this.speedDown}>
+                                /2
+                            </button>
+                            <button title="Reset Speed - Hotkey: Backspace" type="button"
+                                    className="btn btn-default btn-lg" onClick={this.speedReset}>
+                                1:1
+                            </button>
+                            <button title="Speed x2 - Hotkey: }" type="button"
+                                    className="btn btn-default btn-lg margin-right-btn"
+                                    onClick={this.speedUp}>
+                                x2
+                            </button>
+                            <span>{speedStr}</span>
                         </div>
                     </div>
-                    <div className="panel-footer">
-                        <button title="Play/Pause - Hotkey: p" type="button" ref="playbtn"
-                                className="btn btn-default btn-lg margin-right-btn play-btn"
-                                onClick={this.playPauseToggle}>
-                            <i className={"fa fa-" + (this.state.paused ? "play" : "pause")}
-                               aria-hidden="true" />
-                        </button>
-                        <button title="Skip Frame - Hotkey: ." type="button"
-                                className="btn btn-default btn-lg margin-right-btn"
-                                onClick={this.skipFrame}>
-                            <i className="fa fa-step-forward" aria-hidden="true" />
-                        </button>
-                        <button title="Restart Playback - Hotkey: Shift-R" type="button"
-                                className="btn btn-default btn-lg" onClick={this.rewindToStart}>
-                            <i className="fa fa-fast-backward" aria-hidden="true" />
-                        </button>
-                        <button title="Fast-forward to end - Hotkey: Shift-G" type="button"
-                                className="btn btn-default btn-lg margin-right-btn"
-                                onClick={this.fastForwardToEnd}>
-                            <i className="fa fa-fast-forward" aria-hidden="true" />
-                        </button>
-                        <button title="Speed /2 - Hotkey: {" type="button"
-                                className="btn btn-default btn-lg" onClick={this.speedDown}>
-                            /2
-                        </button>
-                        <button title="Reset Speed - Hotkey: Backspace" type="button"
-                                className="btn btn-default btn-lg" onClick={this.speedReset}>
-                            1:1
-                        </button>
-                        <button title="Speed x2 - Hotkey: }" type="button"
-                                className="btn btn-default btn-lg margin-right-btn"
-                                onClick={this.speedUp}>
-                            x2
-                        </button>
-                        <span>{speedStr}</span>
-                    </div>
+                    {error}
                 </div>
             );
         }
