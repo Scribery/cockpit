@@ -273,7 +273,11 @@
                                         <table className="form-table-ct">
                                             <tr>
                                                 <td>{_("ID")}</td>
-                                                <td>{r.id}</td>
+                                                <td>{r.display_id}</td>
+                                            </tr>
+                                            <tr>
+                                                <td>{_("Machine ID")}</td>
+                                                <td>{r.machine_id}</td>
                                             </tr>
                                             <tr>
                                                 <td>{_("Boot ID")}</td>
@@ -531,11 +535,13 @@
                 if (r === undefined) {
                     /* Create new recording */
                     r = {id:            id,
+                         display_id:    id + "-" + e["_MACHINE_ID"],
                          matchList:     ["_UID=" + this.uid,
                                          "TLOG_REC=" + id],
                          user:          e["TLOG_USER"],
                          boot_id:       e["_BOOT_ID"],
                          session_id:    parseInt(e["TLOG_SESSION"], 10),
+                         machine_id:    e["_MACHINE_ID"],
                          pid:           parseInt(e["_PID"], 10),
                          start:         ts,
                          /* FIXME Should be start + message duration */
