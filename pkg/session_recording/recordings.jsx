@@ -342,7 +342,7 @@
         }
 
         handleColumnClick(event) {
-            if(this.state.sorting_field === event.currentTarget.id) {
+            if (this.state.sorting_field === event.currentTarget.id) {
                 this.setState({sorting_asc: !this.state.sorting_asc});
             }
             else {
