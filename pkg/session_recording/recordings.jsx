@@ -328,6 +328,8 @@
             this.handleColumnClick = this.handleColumnClick.bind(this);
             this.getSortedList = this.getSortedList.bind(this);
             this.drawSortDir = this.drawSortDir.bind(this);
+            this.getColumnTitles = this.getColumnTitles.bind(this);
+            this.getColumns = this.getColumns.bind(this);
             this.state = {
                 sorting_field: "start",
                 sorting_asc: true,
@@ -384,7 +386,7 @@
             this.drawSortDir();
         }
 
-        render() {
+        getColumnTitles() {
             let columnTitles = [
                 (<div id="user" className="sort" onClick={this.handleColumnClick}><span>{_("User")}</span> <div
                     ref="user" className="sort-icon"></div></div>),
@@ -395,15 +397,36 @@
                 (<div id="duration" className="sort" onClick={this.handleColumnClick}><span>{_("Duration")}</span> <div
                     ref="duration" className="sort-icon"></div></div>),
             ];
+            if (this.props.diff_hosts === true) {
+                columnTitles.push((<div id="hostname" className="sort" onClick={this.handleColumnClick}>
+                    <span>{_("Hostname")}</span> <div ref="hostname" className="sort-icon"></div></div>));
+            }
+            return columnTitles;
+        }
+
+        getColumns(r) {
+            let columns = [r.user,
+                       formatDateTime(r.start),
+                       formatDateTime(r.end),
+                       formatDuration(r.end - r.start)]
+            if (this.props.diff_hosts === true) {
+                columns.push(r.hostname);
+            }
+            return columns;
+        }
+
+        render() {
+            let columnTitles = this.getColumnTitles();
+
             let list = this.getSortedList();
             let rows = [];
 
+
+
             for (let i = 0; i < list.length; i++) {
                 let r = list[i];
-                let columns = [r.user,
-                               formatDateTime(r.start),
-                               formatDateTime(r.end),
-                               formatDuration(r.end - r.start)];
+                let columns = this.getColumns(r);
+
                 rows.push(<Listing.ListingRow
                             rowId={r.id}
                             columns={columns}
@@ -482,6 +505,7 @@
                 /* value to filter recordings by username */
                 username: cockpit.location.options.username || null,
                 error_tlog_uid: false,
+                diff_hosts: false,
             }
         }
 
@@ -512,6 +536,13 @@
             let recordingList = this.state.recordingList.slice();
             let i;
             let j;
+            let hostname;
+
+            if (entryList[0]) {
+                if (entryList[0]["_HOSTNAME"]) {
+                    hostname = entryList[0]["_HOSTNAME"];
+                }
+            }
 
             for (i = 0; i < entryList.length; i++) {
                 let e = entryList[i];
@@ -530,11 +561,16 @@
                 /* If no recording found */
                 if (r === undefined) {
                     /* Create new recording */
+                    if (hostname != e["_HOSTNAME"]) {
+                        this.setState({diff_hosts: true});
+                    }
+
                     r = {id:            id,
                          matchList:     ["_UID=" + this.uid,
                                          "TLOG_REC=" + id],
                          user:          e["TLOG_USER"],
                          boot_id:       e["_BOOT_ID"],
+                         hostname:      e["_HOSTNAME"],
                          session_id:    parseInt(e["TLOG_SESSION"], 10),
                          pid:           parseInt(e["_PID"], 10),
                          start:         ts,
@@ -728,7 +764,7 @@
                         onDateSinceChange={this.handleDateSinceChange} dateSince={this.state.dateSince}
                         onDateUntilChange={this.handleDateUntilChange} dateUntil={this.state.dateUntil}
                         onUsernameChange={this.handleUsernameChange} username={this.state.username}
-                        list={this.state.recordingList} />
+                        list={this.state.recordingList} diff_hosts={this.state.diff_hosts} />
                 );
             } else {
                 return (
