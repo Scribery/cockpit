@@ -233,6 +233,9 @@
         constructor(props) {
             super(props);
             this.goBackToList = this.goBackToList.bind(this);
+            this.getHostname = this.getHostname.bind(this);
+            this.Hostname = this.Hostname.bind(this);
+            this.hostname = null;
         }
 
         goBackToList() {
@@ -241,6 +244,35 @@
             } else {
                 cockpit.location.go('/');
             }
+        }
+
+        getHostname() {
+            cockpit.spawn(["hostname"], { err: "ignore" })
+                .done(function(output) {
+                    this.hostname = $.trim(output);
+                })
+                .fail(function(ex) {
+                    console.log(ex);
+                });
+        }
+
+        Hostname(props) {
+            let style = {
+                display: "none"
+            };
+            if (this.hostname != null && this.hostname != props.hostname) {
+                style = {};
+            }
+            return (
+                <tr style={style}>
+                    <td>{_("Hostname")}</td>
+                    <td>{props.hostname}</td>
+                </tr>
+            );
+        }
+
+        componentWillMount() {
+            this.getHostname();
         }
 
         render() {
@@ -275,6 +307,7 @@
                                                 <td>{_("ID")}</td>
                                                 <td>{r.id}</td>
                                             </tr>
+                                            <this.Hostname hostname={r.hostname} />
                                             <tr>
                                                 <td>{_("Boot ID")}</td>
                                                 <td>{r.boot_id}</td>
