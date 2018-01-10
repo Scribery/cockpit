@@ -223,6 +223,26 @@
         }
     }
 
+    let HostnamePicker = class extends React.Component {
+        constructor(props) {
+            super(props);
+            this.handleHostnameChange = this.handleHostnameChange.bind(this);
+        }
+
+        handleHostnameChange(e) {
+            this.props.onHostnameChange(e.target.value);
+        }
+
+        render() {
+            return (
+                <div className="input-group">
+                    <input type="text" className="form-control" value={this.props.hostname}
+                        onChange={this.handleHostnameChange} />
+                </div>
+            );
+        }
+    }
+
     /*
      * A component representing a single recording view.
      * Properties:
@@ -491,6 +511,13 @@
                                     <UserPicker onUsernameChange={this.props.onUsernameChange}
                                         username={this.props.username} />
                                 </td>
+                                <td className="top">
+                                    <label className="control-label" for="hostname">Hostname</label>
+                                </td>
+                                <td>
+                                    <HostnamePicker onHostnameChange={this.props.onHostnameChange}
+                                        hostname={this.props.hostname} />
+                                </td>
                             </th>
                         </table>
                     </div>
@@ -518,6 +545,7 @@
             this.handleDateSinceChange = this.handleDateSinceChange.bind(this);
             this.handleDateUntilChange = this.handleDateUntilChange.bind(this);
             this.handleUsernameChange = this.handleUsernameChange.bind(this);
+            this.handleHostnameChange = this.handleHostnameChange.bind(this);
             /* Journalctl instance */
             this.journalctl = null;
             /* Recording ID journalctl instance is invoked with */
@@ -537,6 +565,7 @@
                 dateUntilLastValid: null,
                 /* value to filter recordings by username */
                 username: cockpit.location.options.username || null,
+                hostname: cockpit.location.options.hostname || null,
                 error_tlog_uid: false,
                 diff_hosts: false,
             }
@@ -559,6 +588,7 @@
                 dateSince: cockpit.location.options.dateSince || null,
                 dateUntil: cockpit.location.options.dateUntil || null,
                 username: cockpit.location.options.username || null,
+                hostname: cockpit.location.options.hostname || null,
             });
         }
 
@@ -656,6 +686,10 @@
             if (this.state.username) {
                 matches.push("TLOG_USER=" + this.state.username);
             }
+            if (this.state.hostname && this.state.hostname != null &&
+                this.state.hostname != "") {
+                matches.push("_HOSTNAME=" + this.state.hostname);
+            }
 
             let options = {follow: true, count: "all"};
 
@@ -727,6 +761,10 @@
             cockpit.location.go([], $.extend(cockpit.location.options, { username: username }));
         }
 
+        handleHostnameChange(hostname) {
+            cockpit.location.go([], $.extend(cockpit.location.options, { hostname: hostname }));
+        }
+
         componentDidMount() {
             let proc = cockpit.spawn(["getent", "passwd", "tlog"]);
 
@@ -776,7 +814,8 @@
             }
             if (this.state.dateSinceLastValid != prevState.dateSinceLastValid ||
                 this.state.dateUntilLastValid != prevState.dateUntilLastValid ||
-                this.state.username != prevState.username
+                this.state.username != prevState.username ||
+                this.state.hostname != prevState.hostname
             ) {
                 this.clearRecordings();
                 this.journalctlRestart();
@@ -797,6 +836,7 @@
                         onDateSinceChange={this.handleDateSinceChange} dateSince={this.state.dateSince}
                         onDateUntilChange={this.handleDateUntilChange} dateUntil={this.state.dateUntil}
                         onUsernameChange={this.handleUsernameChange} username={this.state.username}
+                        onHostnameChange={this.handleHostnameChange} hostname={this.state.hostname}
                         list={this.state.recordingList} diff_hosts={this.state.diff_hosts} />
                 );
             } else {
