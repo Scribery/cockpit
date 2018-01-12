@@ -37,10 +37,14 @@
 .machines-disks-source-descr {
     color: #888888;
     text-align: right;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
 }
 
 .machines-disks-source-value {
     text-align: left !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
 }
 
 .machines-disks-alias {
@@ -57,6 +61,7 @@
 
 .machines-console-frame {
     height: 1px; /* keep at minimum, down-sizing does not work */
+    margin-top: 1em;
 }
 
 .machines-console-frame-vnc {
@@ -83,13 +88,6 @@
 
 .blue {
     color: #4babdc;
-}
-
-.machines-desktop-delimiter {
-    margin-top: 20px;
-    margin-bottom: 0px;
-    border: 0;
-    border-top: 1px solid #cccccc;
 }
 
 .machines-desktop-main {
@@ -148,4 +146,83 @@
 
 .dropdown-buttons-container {
     display: inline-flex !important;
+}
+
+.machines-network-source-descr {
+    color: #888888;
+    text-align: right;
+    padding: 5px 10px 5px 10px !important;
+}
+
+.machines-network-source-value {
+    padding: 5px 10px 5px 10px !important;
+    text-align: left !important;
+}
+
+.machines-network-up {
+    color: green;
+}
+
+.machines-network-down {
+    color: red;
+}
+
+.machines-network-additional-column {
+    padding-left: 0;
+}
+
+.machines-network-source-link {
+    cursor: pointer;
+    text-decoration: underline;
+    color: #00659c;
+}
+
+.machines-network-state-text {
+    margin-right: 5px;
+}
+
+.machines-network-state {
+    width: 100px;
+    display: inline-flex;
+    justify-content: space-between;
+}
+
+.machines-network-list {
+    max-height: 500px;
+    overflow: auto;
+    padding-bottom: 15px;
+}
+
+.machines-terminal {
+    width: calc(100vw - 6em);
+    height: calc(40vh);
+
+    padding-right: 0px;
+    padding-left: 0px;
+}
+
+.panel-heading .btn {
+    margin-left: 3px;
+}
+
+.console-menu {
+    padding-bottom: 1em;
+}
+
+.console-actions-buttons {
+    margin-left: 5px;
+}
+
+.console-actions {
+    float: right;
+    position: relative;
+    top: -2em;
+}
+
+.console-type-select {
+    width: 19em !important;
+}
+
+.machines-status-alert {
+    padding-right: 5px;
 }

@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 # This file is part of Cockpit.
@@ -35,13 +35,15 @@ BOTS = os.path.join(os.path.dirname(__file__), "..")
 class Sink(object):
     def __init__(self, host, identifier, status=None):
         self.attachments = tempfile.mkdtemp(prefix="attachments.", dir="/var/tmp")
+        os.environ["TEST_ATTACHMENTS"] = self.attachments
         self.status = status
 
         # Start a gzip and cat processes
         self.ssh = subprocess.Popen([ "ssh", host, "--", "python", "sink", identifier ], stdin=subprocess.PIPE)
 
         # Send the status line
-        self.ssh.stdin.write(json.dumps(status) + "\n")
+        self.ssh.stdin.write(json.dumps(status).encode('utf-8') + b"\n")
+        self.ssh.stdin.flush()
 
         # Now dup our own output and errors into the pipeline
         sys.stdout.flush()
@@ -52,7 +54,7 @@ class Sink(object):
         os.dup2(self.ssh.stdin.fileno(), 2)
 
     def attach(self, filename):
-        shutil.move(filename, self.attachments)
+        shutil.copy(filename, self.attachments)
 
     def flush(self, status=None):
         assert self.ssh is not None
@@ -73,12 +75,12 @@ class Sink(object):
         if status is None:
             status = self.status
         if status is not None:
-            self.ssh.stdin.write("\n" + json.dumps(status))
+            self.ssh.stdin.write(b"\n" + json.dumps(status).encode('utf-8'))
 
         # Send a zero character and send the attachments
         files = os.listdir(self.attachments)
         if len(files):
-            self.ssh.stdin.write('\x00')
+            self.ssh.stdin.write(b'\x00')
             self.ssh.stdin.flush()
             with tarfile.open(name="attachments.tgz", mode="w:gz", fileobj=self.ssh.stdin) as tar:
                 for filename in files:

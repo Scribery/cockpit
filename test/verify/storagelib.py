@@ -21,6 +21,11 @@ import os
 import re
 from testlib import *
 
+# A helper for dialog_set_val and dialog_expect
+class CheckBoxText:
+    def __init__(self, val):
+        self.val = val
+
 class StorageCase(MachineCase):
     def setUp(self):
 
@@ -52,17 +57,16 @@ class StorageCase(MachineCase):
         return self.machine.execute("stat -L '%s' -c %%i" % f)
 
     def retry(self, setup, check, teardown):
-        b = self.browser
-        b.arm_timeout()
-        while True:
+        def step():
             if setup:
                 setup()
             if check():
-                break
+                return True
             if teardown:
                 teardown()
-            b.wait_checkpoint()
-        b.disarm_timeout()
+            return False
+
+        self.browser.wait(step)
 
     # Content
 
@@ -70,7 +74,7 @@ class StorageCase(MachineCase):
         b = self.browser
         tbody = "#detail-content tbody:nth-of-type(%d)" % index
         b.wait_present(tbody)
-        if not "open" in b.attr(tbody, "class"):
+        if not "open" in (b.attr(tbody, "class") or ""):
             b.click(tbody + " tr.listing-ct-item")
             b.wait_present(tbody + ".open")
 
@@ -192,22 +196,40 @@ class StorageCase(MachineCase):
             # size slider
             self.browser.set_val(self.dialog_field(field) + " .size-unit", "1048576")
             self.browser.set_val(self.dialog_field(field) + " .size-text", str(val))
+        elif isinstance(val, CheckBoxText):
+            sel = self.dialog_field(field);
+            if val.val == False:
+                self.browser.set_checked(sel + " input[type=checkbox]", False)
+            else:
+                self.browser.set_checked(sel + " input[type=checkbox]", True)
+                self.browser.set_val(sel + " input[type=text]", val.val)
         else:
             self.browser.set_val(self.dialog_field(field), val)
 
     def dialog_set_expander(self, field, val):
         self.browser.call_js_func(
             """(function (sel, val) {
-                 if ($(sel).hasClass('collapsed') == val) {
-                    $(sel).click();
-                 }
+                 if ((ph_find(sel).className.indexOf('collapsed') >= 0) == val)
+                    ph_click(sel);
             })""", self.dialog_field(field), val)
 
+    def dialog_set_combobox(self, field, val):
+        self.browser.set_val(self.dialog_field(field) + " input[type=text]", val)
+
+    def dialog_combobox_choices(self, field):
+        return self.browser.call_js_func("""(function (sel) {
+                                               var lis = ph_find(sel).querySelectorAll('li');
+                                               var result = [];
+                                               for (i = 0; i < lis.length; ++i)
+                                                 result.push(lis[i].textContent);
+                                               return result;
+                                             })""", self.dialog_field(field))
+
     def dialog_is_present(self, field, label):
-        return self.browser.is_present('%s .checkbox:contains("%s") input' % (self.dialog_field(field), label))
+        return self.browser.is_present('%s :contains("%s") input' % (self.dialog_field(field), label))
 
     def dialog_select(self, field, label, val):
-        self.browser.set_checked('%s .checkbox:contains("%s") input' % (self.dialog_field(field), label), val)
+        self.browser.set_checked('%s :contains("%s") input' % (self.dialog_field(field), label), val)
 
     def dialog_wait_val(self, field, val):
         if isinstance(val, int):
@@ -229,14 +251,21 @@ class StorageCase(MachineCase):
         self.browser.click('#dialog [data-action="apply"]')
 
     def dialog_cancel(self):
-        self.browser.click('#dialog [data-dismiss="modal"]')
+        self.browser.click('#dialog [data-action="cancel"]')
 
     def dialog_wait_close(self):
         self.browser.wait_not_present('#dialog')
 
     def dialog_check(self, expect):
         for f in expect:
-            if not self.dialog_val(f) == expect[f]:
+            if isinstance(expect[f], CheckBoxText):
+                sel = self.dialog_field(f);
+                if expect[f].val == False:
+                    return self.brower.is_present(sel + " input[type=checkbox]:not(:checked)")
+                else:
+                    return (self.browser.is_present(sel + " input[type=checkbox]:checked") and
+                            self.browser.val(sel + " input[type=text]") == expect[f].val)
+            elif not self.dialog_val(f) == expect[f]:
                 return False
         return True
 

@@ -25,11 +25,7 @@ import time
 
 base_dir = os.path.dirname(os.path.realpath(__file__))
 test_dir = os.path.abspath(os.path.join(base_dir, ".."))
-
-try:
-    import testlib
-except:
-    sys.path.append(test_dir)
+sys.path.append(test_dir)
 
 from common.testlib import *
 from common.testvm import VirtMachine
@@ -54,6 +50,7 @@ class OCBrowser(Browser):
         self.set_val("#inputPassword", "fubar")
         self.click('.btn-primary')
         self.expect_load()
+        self.expect_load_frame("cockpit1:localhost/" + ("Registry" in self.label and "registry" or "kubernetes"))
         self.wait_present('#content')
         self.wait_visible('#content')
         if path:
@@ -62,8 +59,8 @@ class OCBrowser(Browser):
 
 class OCMachine(VirtMachine):
     run_registry = False
-
     def __init__(self, *args, **kwargs):
+        self.started = False
         VirtMachine.__init__(self, *args, **kwargs)
 
     def wait_oc(self):
@@ -79,6 +76,9 @@ class OCMachine(VirtMachine):
                 time.sleep(1)
 
     def start_cockpit(self, host=None):
+        if self.started:
+            return
+
         path = os.path.join(base_dir, "files", "cockpit-openshift-template.json")
         self.upload([path], "/tmp")
         self.wait_oc()
@@ -103,6 +103,7 @@ class OCMachine(VirtMachine):
         self.execute("oc process -f /tmp/cockpit-openshift-template.json {0} > out.json".format(' '.join(args)))
         self.execute("oc create -f out.json")
         self.wait_for_cockpit_running(seconds=180, address="10.111.112.101", port=30000)
+        self.started = True
 
 class RegistryMachine(OCMachine):
     run_registry = True
@@ -117,8 +118,12 @@ class OCCase(kubelib.KubernetesCase):
         path = os.path.join(test_dir, "verify", "files", "mock-app-openshift.json")
         self.machine.upload([path], "/tmp")
 
-        self.browser = OCBrowser(self.machine.forward["30000"], self.label())
+        # HACK: Headless Chromium breaks with client SSL cert requests from OAuth; work around by using "full" chrome
+        # with xvfb (https://bugs.chromium.org/p/chromium/issues/detail?id=757181)
+        self.browser = OCBrowser(self.machine.forward["30000"], self.label(), headless=False)
         self.addCleanup(lambda: self.browser.kill())
+        # our OAuth provider uses a self-signed SSL certificate
+        self.browser.ignore_ssl_certificate_errors(True)
 
         self.tmpdir = tempfile.mkdtemp()
         self.openshift = self.machine
@@ -126,6 +131,14 @@ class OCCase(kubelib.KubernetesCase):
 
         # Expect the default container user limitations during testing
         self.openshift.execute("oc patch scc restricted -p '{ \"runAsUser\": { \"type\": \"MustRunAsRange\" } }'")
+
+        def intercept():
+            if not self.checkSuccess():
+                self.snapshot("FAIL")
+                self.copy_js_log("FAIL")
+                self.copy_journal("FAIL")
+                self.copy_cores("FAIL")
+        self.addCleanup(intercept)
 
 class TestOpenshift(OCCase, kubelib.OpenshiftCommonTests):
     def testLogin(self):
@@ -144,6 +157,7 @@ class TestOpenshift(OCCase, kubelib.OpenshiftCommonTests):
         b.click('.btn-primary')
 
         b.expect_load()
+        b.expect_load_frame("cockpit1:localhost/kubernetes")
         b.wait_present("#content")
         b.wait_text('#content-user-name', 'kuser')
         b.wait_in_text("title", "Openshift Cockpit")
@@ -166,10 +180,16 @@ class TestOpenshift(OCCase, kubelib.OpenshiftCommonTests):
         b.click('.btn-primary')
 
         b.expect_load()
+        b.expect_load_frame("cockpit1:localhost/kubernetes")
         b.wait_present("#content")
 
-class TestRegistry(OCCase):
+class TestRegistry(OCCase, kubelib.RegistryTests):
     machine_class = RegistryMachine
+    registry_root = "/registry"
+
+    def setup_user(self, user, password):
+        self.browser.default_user = user
+        self.browser.password = password
 
     def testLogin(self):
         b = self.browser
@@ -187,6 +207,7 @@ class TestRegistry(OCCase):
         b.click('.btn-primary')
 
         b.expect_load()
+        b.expect_load_frame("cockpit1:localhost/registry")
         b.wait_present("#content")
         b.wait_text('#content-user-name', 'kuser')
         b.wait_in_text("title", "Image Registry")
@@ -195,7 +216,8 @@ class TestRegistry(OCCase):
         b.wait_present(".dashboard-commands")
 
         b.switch_to_top()
-        b.wait_not_visible("#content-navbar")
+        b.wait_present(".area-ct-body")
+        b.wait_present(".area-ct-body.single-nav")
 
         b.logout()
         b.wait_in_text("#login-fatal-message", "Logout Successful")
@@ -212,6 +234,7 @@ class TestRegistry(OCCase):
         b.click('.btn-primary')
 
         b.expect_load()
+        b.expect_load_frame("cockpit1:localhost/registry")
         b.wait_present("#content")
         b.enter_page("/registry")
         b.wait_present(".dashboard-commands")

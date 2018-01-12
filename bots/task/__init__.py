@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 # This file is part of Cockpit.
@@ -24,6 +24,7 @@
 import argparse
 import os
 import random
+import shutil
 import socket
 import subprocess
 import sys
@@ -32,8 +33,8 @@ import traceback
 
 sys.dont_write_bytecode = True
 
-import github
-import sink
+from . import github
+from . import sink
 
 __all__ = (
     "api",
@@ -44,14 +45,17 @@ __all__ = (
     "issue",
     "verbose",
     "stale",
+    "REDHAT_PING",
 )
+
+# Server to tell us if we can handle Red Hat images
+REDHAT_PING = "http://cockpit-11.e2e.bos.redhat.com"
 
 api = github.GitHub()
 verbose = False
 
 BOTS = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 BASE = os.path.normpath(os.path.join(BOTS, ".."))
-DEVNULL = open("/dev/null", "r+")
 
 #
 # The main function takes a list of tasks, each of wihch has the following
@@ -91,6 +95,8 @@ def main(**kwargs):
         help="Act on an already created task issue")
     parser.add_argument("--publish", dest="publish", default=os.environ.get("TEST_PUBLISH", ""),
         action="store", help="Publish results centrally to a sink")
+    parser.add_argument("--dry", dest="dry", action="store_true",
+        help="Dry run to validate this task if supported")
     parser.add_argument("context", nargs="?")
 
     opts = parser.parse_args()
@@ -102,6 +108,7 @@ def main(**kwargs):
         task["verbose"] = opts.verbose
     task["issue"] = opts.issue
     task["publish"] = opts.publish
+    task["dry"] = opts.dry
 
     ret = run(opts.context, **task)
 
@@ -187,7 +194,7 @@ def finish(publishing, ret, name, context, issue):
     if not ret:
         comment = None
         result = "Completed"
-    elif isinstance(ret, basestring):
+    elif isinstance(ret, str):
         comment = "{0}: :link".format(ret)
         result = ret
     else:
@@ -251,46 +258,19 @@ def run(context, function, **kwargs):
 
     ret = "Task threw an exception"
     try:
-        pull = None
         if issue and "pull_request" in issue:
-           kwargs["pull"] = pull = api.get(issue["pull_request"]["url"])
-
-        # If this is a pull request then check it out
-        if pull:
-            execute("git", "fetch", "origin", "pull/{0}/head".format(pull["number"]))
-            execute("git", "checkout", "--detach", pull['head']['sha'])
+           kwargs["pull"] = api.get(issue["pull_request"]["url"])
 
         ret = function(context, **kwargs)
-    except (RuntimeError, subprocess.CalledProcessError), ex:
+    except (RuntimeError, subprocess.CalledProcessError) as ex:
         ret = str(ex)
     except (AssertionError, KeyboardInterrupt):
         raise
     except:
-        traceback.print_exc(file=sys.stderr)
+        traceback.print_exc()
     finally:
         finish(publishing, ret, name, context, issue)
     return ret or 0
-
-# Check out the given ref and if necessary overlay the bots
-# directory on top of it as expected on non-master branches
-def checkout(ref="HEAD", base=None):
-    if ref:
-        execute("git", "checkout", "--detach", ref)
-
-    # COMPAT: If the bots directory doesn't exist in this branch, check it out from master
-    if base and base != "master":
-        sys.stderr.write("Checking out bots directory from master ...\n")
-        subprocess.check_call([ "git", "checkout", "--force", "origin/master", "--", "bots/" ])
-
-        # The machine code is special, copy it from master too
-        machine = os.path.join(BOTS, "machine")
-        for name in os.listdir(machine):
-            path = os.path.join(machine, name)
-            if os.path.islink(path):
-                os.unlink(path)
-                code = subprocess.check_output([ "git", "show", "origin/master:test/common/{0}".format(name) ])
-                with open(path, "w") as f:
-                    f.write(code)
 
 # Check if the given files that match @pathspec are stale
 # and haven't been updated in @days.
@@ -300,12 +280,12 @@ def stale(days, pathspec, ref="HEAD"):
     def execute(*args):
         if verbose:
             sys.stderr.write("+ " + " ".join(args) + "\n")
-        output = subprocess.check_output(args, cwd=BASE)
+        output = subprocess.check_output(args, cwd=BASE, universal_newlines=True)
         if verbose:
             sys.stderr.write("> " + output + "\n")
         return output
 
-    timestamp = execute("git", "log", "--max-count=1", "--pretty=format:%at", ref, "--", pathspec)
+    timestamp = execute("git", "log", "--max-count=1", "--pretty=format:%ct", ref, "--", pathspec)
     try:
         timestamp = int(timestamp)
     except ValueError:
@@ -347,7 +327,7 @@ def execute(*args):
     # No prompting for passwords
     if "GIT_ASKPASS" not in env:
         env["GIT_ASKPASS"] = "/bin/true"
-    output = subprocess.check_output(args, cwd=BASE, stderr=subprocess.STDOUT, env=env)
+    output = subprocess.check_output(args, cwd=BASE, stderr=subprocess.STDOUT, env=env, universal_newlines=True)
     sys.stderr.write(censored(output))
 
 def branch(context, message, pathspec=".", issue=None, **kwargs):
@@ -358,7 +338,7 @@ def branch(context, message, pathspec=".", issue=None, **kwargs):
 
     # Tell git about our github token as a user name
     try:
-        subprocess.check_output(["git", "config", "credential.https://github.com.username", api.token])
+        subprocess.check_call(["git", "config", "credential.https://github.com.username", api.token])
     except subprocess.CalledProcessError:
         raise RuntimeError("Couldn't configure git config with our API token")
 
@@ -441,3 +421,7 @@ def comment(issue, comment):
     except TypeError:
         number = issue
     return api.post("issues/{0}/comments".format(number), { "body": comment })
+
+def attach(filename):
+    if "TEST_ATTACHMENTS" in os.environ:
+        shutil.copy(filename, os.environ["TEST_ATTACHMENTS"])

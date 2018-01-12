@@ -25,9 +25,10 @@ import CONFIG from '../config.es6';
 import { Listing, ListingRow } from "cockpit-components-listing.jsx";
 import { StateIcon, DropdownButtons } from "../../machines/hostvmslist.jsx";
 
-import { toGigaBytes, valueOrDefault, isSameHostAddress, getHostAddress } from '../helpers.es6';
+import { toGigaBytes, valueOrDefault, isSameHostAddress } from '../helpers.es6';
 import { startVm, goToSubpage } from '../actions.es6';
 import rephraseUI from '../rephraseUI.es6';
+import { getCurrentCluster, getHost } from '../selectors.es6';
 
 React;
 const _ = cockpit.gettext;
@@ -82,12 +83,12 @@ const VmActions = ({ vm, hostName, dispatch }) => {
     const runButton = {
         title: _("Run"),
         action: () => dispatch(startVm(vm)),
-        id: `cluster-${vm.id}-run`
+        id: `cluster-${vm.name}-run`
     };
     const runHereButton = {
         title: _("Run Here"),
         action: () => dispatch(startVm(vm, hostName)),
-        id: `cluster-${vm.id}-run-here`
+        id: `cluster-${vm.name}-run-here`
     };
 
     if (['suspended'].indexOf(vm.state) >= 0) {
@@ -110,41 +111,33 @@ const VmActions = ({ vm, hostName, dispatch }) => {
     return null;
 };
 
-const VmCluster = ({ id, clusters }) => {
-    if (!id || !clusters || !clusters[id]) {
-        return null;
-    }
-    return (
-        <div>
-            {clusters[id].name}
-        </div>
-    );
-};
-
 const VmLastMessage = ({ vm }) => {
     if (!vm.lastMessage) {
         return null;
     }
-    const detail = (vm.lastMessageDetail && vm.lastMessageDetail.exception) ? vm.lastMessageDetail.exception: vm.lastMessage;
+
+    let detail = vm.lastMessage;
+    if (vm.lastMessageDetail && vm.lastMessageDetail.data) {
+        detail = vm.lastMessageDetail.data;
+    }
+
     return (
-        <p title={detail} data-toggle='tooltip'>
+        <p title={detail} data-toggle='tooltip' id={`clustervm-${vm.name}-actionerror`}>
             <span className='pficon-warning-triangle-o' />&nbsp;{vm.lastMessage}
         </p>
     );
 };
 
-const Vm = ({ vm, hosts, templates, clusters, config, dispatch }) => {
+const Vm = ({ vm, hosts, templates, config, dispatch }) => {
     const stateIcon = (<StateIcon state={vm.state} config={config}/>);
-
-    const hostAddress = getHostAddress();
-    const hostId = Object.getOwnPropertyNames(hosts).find(hostId => hosts[hostId].address === hostAddress);
-    const hostName = hostId && hosts[hostId] ? hosts[hostId].name : undefined;
+    const ovirtConfig = config.providerState && config.providerState.ovirtConfig;
+    const currentHost = getHost(hosts, ovirtConfig);
+    const hostName = currentHost && currentHost.name;
 
     return (<ListingRow // TODO: icons?
         columns={[
             {name: vm.name, 'header': true},
             <VmDescription descr={vm.description} />,
-            <VmCluster id={vm.clusterId} clusters={clusters} />,
             <VmTemplate id={vm.templateId} templates={templates} />,
             <VmMemory mem={vm.memory} />,
             <VmCpu cpu={vm.cpu} />,
@@ -159,7 +152,7 @@ const Vm = ({ vm, hosts, templates, clusters, config, dispatch }) => {
 };
 
 const ClusterVms = ({ dispatch, config }) => {
-    const { vms, hosts, templates, clusters } = config.providerState;
+    const { vms, hosts, templates, clusters, ovirtConfig } = config.providerState;
 
     if (!vms) { // before cluster vms are loaded
         return (<NoVmUnitialized />);
@@ -169,9 +162,15 @@ const ClusterVms = ({ dispatch, config }) => {
         return (<NoVm />);
     }
 
+    const currentCluster = getCurrentCluster(hosts, clusters, ovirtConfig);
+    let title = cockpit.format(_("Cluster Virtual Machines"));
+    if (currentCluster) {
+        title = cockpit.format(_("Virtual Machines of $0 cluster"), currentCluster.name);
+    }
+
     return (<div className='container-fluid'>
-        <Listing title={_("Cluster Virtual Machines")} columnTitles={[
-        _("Name"), _("Description"), _("Cluster"), _("Template"), _("Memory"), _("vCPUs"), _("OS"),
+        <Listing title={title} columnTitles={[
+        _("Name"), _("Description"), _("Template"), _("Memory"), _("vCPUs"), _("OS"),
         _("HA"), _("Stateless"), _("Host"),
         (<div className='ovirt-provider-cluster-vms-actions'>{_("Action")}</div>),
         (<div className='ovirt-provider-cluster-vms-state'>{_("State")}</div>)]}>
@@ -180,7 +179,6 @@ const ClusterVms = ({ dispatch, config }) => {
                     <Vm vm={vms[vmId]}
                         hosts={hosts}
                         templates={templates}
-                        clusters={clusters}
                         config={config}
                         dispatch={dispatch}
                     />);
@@ -189,51 +187,6 @@ const ClusterVms = ({ dispatch, config }) => {
     </div>);
 };
 
-// --- hack for phantomJS:
-// https://tc39.github.io/ecma262/#sec-array.prototype.find
-if (!Array.prototype.find) {
-    Object.defineProperty(Array.prototype, 'find', {
-        value: function(predicate) {
-            // 1. Let O be ? ToObject(this value).
-            if (this == null) {
-                throw new TypeError('"this" is null or not defined');
-            }
-
-            var o = Object(this);
-
-            // 2. Let len be ? ToLength(? Get(O, "length")).
-            var len = o.length >>> 0;
-
-            // 3. If IsCallable(predicate) is false, throw a TypeError exception.
-            if (typeof predicate !== 'function') {
-                throw new TypeError('predicate must be a function');
-            }
-
-            // 4. If thisArg was supplied, let T be thisArg; else let T be undefined.
-            var thisArg = arguments[1];
-
-            // 5. Let k be 0.
-            var k = 0;
-
-            // 6. Repeat, while k < len
-            while (k < len) {
-                // a. Let Pk be ! ToString(k).
-                // b. Let kValue be ? Get(O, Pk).
-                // c. Let testResult be ToBoolean(? Call(predicate, T, « kValue, k, O »)).
-                // d. If testResult is true, return kValue.
-                var kValue = o[k];
-                if (predicate.call(thisArg, kValue, k, o)) {
-                    return kValue;
-                }
-                // e. Increase k by 1.
-                k++;
-            }
-
-            // 7. Return undefined.
-            return undefined;
-        }
-    });
-}
 // ------------
 
 export { VmLastMessage, VmDescription, VmMemory, VmCpu, VmOS, VmHA, VmStateless };

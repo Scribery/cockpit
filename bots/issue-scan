@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 # This file is part of Cockpit.
@@ -27,6 +27,7 @@ NAMES = [
     "koji-build",
     "npm-update",
     "naughty-prune",
+    "learn-tests",
 ]
 
 KVM_TASKS = [
@@ -44,9 +45,6 @@ WINDOWS_TASKS = [
     "windows"
 ]
 
-# Server to tell us if we can create Red Hat images
-REDHAT_PING = "http://file.rdu.redhat.com"
-
 # Credentials for working on above contexts
 REDHAT_CREDS = "~/.rhel/login"
 
@@ -54,11 +52,13 @@ import argparse
 import pipes
 import os
 import sys
-import urllib
+import urllib.request
+import urllib.parse
+import urllib.error
 
 sys.dont_write_bytecode = True
 
-from task import github
+from task import github, REDHAT_PING
 
 BOTS = os.path.normpath(os.path.join(os.path.dirname(__file__)))
 BASE = os.path.normpath(os.path.join(BOTS, ".."))
@@ -74,7 +74,7 @@ def main():
         sys.stderr.write("tests-scan: No /dev/kvm access, not creating images here\n")
 
     try:
-        urllib.urlopen(REDHAT_PING).read()
+        urllib.request.urlopen(REDHAT_PING).read()
         redhat = os.path.exists(os.path.expanduser(REDHAT_CREDS))
     except IOError:
         redhat = False
@@ -121,6 +121,11 @@ def output_task(command, issue, verbose):
         return None
 
     context = context.strip()
+    checkout = "PRIORITY={priority:04d} "
+    cmd = "bots/{name} --issue='{issue}' {context}"
+
+    if "pull_request" in issue:
+        checkout += "bots/make-checkout --verbose pull/{issue}/head && "
 
     if verbose:
         return "issue-{issue} {name} {context}    {priority}".format(
@@ -132,11 +137,11 @@ def output_task(command, issue, verbose):
     else:
         if context:
             context = pipes.quote(context)
-        return "PRIORITY={priority:04d} bots/{name} --issue='{issue}' {context}".format(
+        return (checkout + cmd).format(
             issue=int(number),
             priority=PRIORITY,
             name=name,
-            context=context
+            context=context,
         )
 
 # Default scan behavior run for each task

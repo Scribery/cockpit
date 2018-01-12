@@ -83,6 +83,10 @@ export function sendNMI(vm) {
     return virt('SENDNMI_VM', { name: vm.name, id: vm.id, connectionName: vm.connectionName });
 }
 
+export function changeNetworkState(vm, networkMac, state) {
+    return virt('CHANGE_NETWORK_STATE', { name: vm.name, networkMac, state, connectionName: vm.connectionName });
+}
+
 /**
  * Delay call of polling action.
  *
@@ -143,7 +147,7 @@ export function updateVm(props) {
     };
 }
 
-export function vmActionFailed({ name, connectionName, message, detail, extraPayload}) {
+export function vmActionFailed({ name, connectionName, message, detail, extraPayload }) {
     return {
         type: 'VM_ACTION_FAILED',
         payload: {
@@ -154,6 +158,11 @@ export function vmActionFailed({ name, connectionName, message, detail, extraPay
             extraPayload,
         }
     };
+}
+
+export function deleteVmMessage({ name, connectionName }) {
+    // recently there's just the last error message kept so we can reuse the code
+    return vmActionFailed({ name, connectionName, message: null, detail: null, extraPayload: null });
 }
 
 export function undefineVm(connectionName, name, transientOnly) {

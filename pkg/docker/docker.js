@@ -133,7 +133,6 @@
             cols: 80,
             rows: 24,
             screenKeys: true,
-            useStyle: true,
             inlineStyle: false,
             useFocus: false,
         });
@@ -149,8 +148,6 @@
         /* Shows and hides the cursor */
         self.typeable = function typeable(yes) {
             term.cursorHidden = !yes;
-            if (yes)
-                term.showCursor();
             term.refresh(term.y, term.y);
             enable_input = yes;
         };

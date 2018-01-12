@@ -20,16 +20,18 @@
 "use strict";
 
 var cockpit = require("cockpit");
-var permission = require("./permissions.js").permission;
 var utils = require("./utils.js");
 var $ = require("jquery");
 
 var React = require("react");
 var Tooltip = require("cockpit-components-tooltip.jsx").Tooltip;
 
+import { OnOffSwitch } from "cockpit-components-onoff.jsx";
+
 var _ = cockpit.gettext;
 
-/* StorageAction - a button or link that triggers a action.
+/* StorageControl - a button or similar that triggers
+ *                  a privileged action.
  *
  * It can be disabled and will show a tooltip then.  It will
  * automatically disable itself when the logged in user doesn't
@@ -37,16 +39,13 @@ var _ = cockpit.gettext;
  *
  * Properties:
  *
- * - onClick: function to execute the action.  It can return a promise and
- *            a error dialog will be shown when the promise fails.
- *
- * - link:    If true renders as a link, otherwise as a button.
- *
  * - excuse:  If set, the button/link is disabled and will show the
  *            excuse in a tooltip.
  */
 
-var StorageAction = React.createClass({
+var permission = cockpit.permission({ admin: true });
+
+var StorageControl = React.createClass({
     getInitialState: function () {
         return { allowed: permission.allowed !== false };
     },
@@ -59,19 +58,6 @@ var StorageAction = React.createClass({
     componentWillUnmount: function () {
         $(permission).off("changed", this.onPermissionChanged);
     },
-    onClick: function (event) {
-        // only consider primary mouse button
-        if (!event || event.button !== 0)
-            return;
-        var promise = this.props.onClick();
-        if (promise)
-            promise.fail(function (error) {
-                $('#error-popup-title').text(_("Error"));
-                $('#error-popup-message').text(error.toString());
-                $('#error-popup').modal('show');
-            });
-        event.stopPropagation();
-    },
     render: function () {
         var excuse = this.props.excuse;
         if (!this.state.allowed) {
@@ -82,39 +68,48 @@ var StorageAction = React.createClass({
             excuse = <span dangerouslySetInnerHTML={markup}></span>;
         }
 
-        var thing;
-        if (this.props.link) {
-            thing = (
-                <a onClick={this.onClick}
-                   className={excuse? " disabled" : ""}>
-                    {this.props.children}
-                </a>
-            );
-        } else {
-            thing = (
-                <button onClick={this.onClick}
-                        className={"btn btn-default" + (excuse? " disabled" : "")}>
-                    {this.props.children}
-                </button>
-            );
-        }
-
         return (
             <Tooltip tip={excuse}>
-                {thing}
+                { this.props.content(excuse) }
             </Tooltip>
         );
     }
 
 });
 
+function checked(callback) {
+    return function (event) {
+        // only consider primary mouse button
+        if (!event || event.button !== 0)
+            return;
+        var promise = callback();
+        if (promise)
+            promise.fail(function (error) {
+                $('#error-popup-title').text(_("Error"));
+                $('#error-popup-message').text(error.toString());
+                $('#error-popup').modal('show');
+            });
+        event.stopPropagation();
+    };
+}
+
 var StorageButton = React.createClass({
     render: function () {
+        var classes = "btn";
+        if (this.props.kind)
+            classes += " btn-" + this.props.kind;
+        else
+            classes += " btn-default";
+
         return (
-            <StorageAction onClick={this.props.onClick}
-                           excuse={this.props.excuse}>
-                {this.props.children}
-            </StorageAction>
+            <StorageControl excuse={this.props.excuse}
+                            content={(excuse) => (
+                                    <button id={this.props.id}
+                                            onClick={checked(this.props.onClick)}
+                                            className={classes + (excuse? " disabled" : "")}>
+                                                      {this.props.children}
+                                    </button>
+                                )}/>
         );
     }
 });
@@ -122,11 +117,13 @@ var StorageButton = React.createClass({
 var StorageLink = React.createClass({
     render: function () {
         return (
-            <StorageAction onClick={this.props.onClick}
-                           excuse={this.props.excuse}
-                           link={true}>
-                {this.props.children}
-            </StorageAction>
+            <StorageControl excuse={this.props.excuse}
+                            content={(excuse) => (
+                                    <a onClick={checked(this.props.onClick)}
+                                       className={excuse? " disabled" : ""}>
+                                                 {this.props.children}
+                                    </a>
+                            )}/>
         );
     }
 });
@@ -147,51 +144,7 @@ var StorageBlockNavLink = React.createClass({
         var block = self.props.block;
 
         if (!block)
-            return;
-
-        var path = block.path;
-        var is_part, is_crypt, is_lvol;
-
-        for (;;) {
-            if (client.blocks_part[path] && client.blocks_ptable[client.blocks_part[path].Table]) {
-                is_part = true;
-                path = client.blocks_part[path].Table;
-            } else if (client.blocks_crypto[path] && client.blocks[client.blocks_crypto[path].CryptoBackingDevice]) {
-                is_crypt = true;
-                path = client.blocks_crypto[path].CryptoBackingDevice;
-            } else {
-                break;
-            }
-        }
-
-        if (client.blocks_lvm2[path] && client.lvols[client.blocks_lvm2[path].LogicalVolume])
-            is_lvol = true;
-
-        var name, go;
-        if (client.mdraids[block.MDRaid]) {
-            name = cockpit.format(_("RAID Device $0"), utils.mdraid_name(client.mdraids[block.MDRaid]));
-            go = function () {
-                cockpit.location.go([ 'mdraid', client.mdraids[block.MDRaid].UUID ]);
-            };
-        } else if (client.blocks_lvm2[path] &&
-                   client.lvols[client.blocks_lvm2[path].LogicalVolume] &&
-                   client.vgroups[client.lvols[client.blocks_lvm2[path].LogicalVolume].VolumeGroup]) {
-                       var vg = client.vgroups[client.lvols[client.blocks_lvm2[path].LogicalVolume].VolumeGroup].Name;
-                       name = cockpit.format(_("Volume Group $0"), vg);
-                       go = function () {
-                           console.location.go([ 'vg', vg ]);
-                       };
-        } else {
-            if (client.drives[block.Drive])
-                name = utils.drive_name(client.drives[block.Drive]);
-            else
-                name = utils.block_name(block);
-            go = function () {
-                cockpit.location.go([ utils.block_name(block).replace(/^\/dev\//, "") ]);
-            };
-        }
-
-        var link = <a onClick={go}>{name}</a>;
+            return null;
 
         // TODO - generalize this to arbitrary number of arguments (when needed)
         function fmt_to_array(fmt, arg) {
@@ -202,25 +155,122 @@ var StorageBlockNavLink = React.createClass({
                 return [ fmt ];
         }
 
-        if (is_lvol && is_crypt)
-            return <span>{fmt_to_array(_("Encrypted Logical Volume of $0"), link)}</span>;
-        else if (is_part && is_crypt)
-            return <span>{fmt_to_array(_("Encrypted Partition of $0"), link)}</span>;
-        else if (is_lvol)
-            return <span>{fmt_to_array(_("Logical Volume of $0"), link)}</span>;
-        else if (is_part)
-            return <span>{fmt_to_array(_("Partition of $0"), link)}</span>;
-        else if (is_crypt)
-            return <span>{fmt_to_array(_("Encrypted $0"), link)}</span>;
-        else
-            return link;
+        var parts = utils.get_block_link_parts(client, block.path);
+
+        var link = (
+            <a onClick={() => { cockpit.location.go(parts.location) }}>
+                {parts.link}
+            </a>
+        );
+
+        return <span>{fmt_to_array(parts.format, link)}</span>;
     }
 });
 
+// StorageOnOff - OnOff switch for asynchronous actions.
+//
+
+class StorageOnOff extends React.Component {
+    constructor() {
+        super();
+        this.state = { promise: null };
+    }
+
+    render() {
+        var self = this;
+
+        function onChange(val) {
+            var promise = self.props.onChange(val);
+            if (promise) {
+                promise.always(function() {
+                    self.setState({ promise: null })
+                });
+                promise.fail(function(error) {
+                    $('#error-popup-title').text(_("Error"));
+                    $('#error-popup-message').text(error.toString());
+                    $('#error-popup').modal('show');
+                });
+            }
+
+            self.setState({ promise: promise, promise_goal_state: val });
+        }
+
+        return (
+            <StorageControl excuse={this.props.excuse}
+                            content={(excuse) => (
+                                    <OnOffSwitch state={this.state.promise
+                                                        ? this.state.promise_goal_state
+                                                        : this.props.state}
+                                                 enabled={!excuse && !this.state.promise}
+                                                 onChange={onChange}/>
+                                )}/>
+        );
+    }
+}
+
+class StorageMultiAction extends React.Component {
+    render() {
+        var dflt = this.props.actions[this.props.default];
+
+        return (
+            <StorageControl excuse={this.props.excuse}
+                            content={(excuse) => {
+                                    var btn_classes = "btn btn-default";
+                                    if (excuse)
+                                        btn_classes += " disabled";
+                                    return (
+                                        <div className="btn-group">
+                                            <button className={btn_classes} onClick={checked(dflt.action)}>
+                                                                                                 {dflt.title}
+                                            </button>
+                                            <button className={btn_classes + " dropdown-toggle"}
+                                                    data-toggle="dropdown">
+                                                <span className="caret"></span>
+                                            </button>
+                                            <ul className="dropdown-menu action-dropdown-menu" role="menu">
+                                                { this.props.actions.map((act) => (
+                                                      <li className="presentation">
+                                                          <a role="menuitem" onClick={checked(act.action)}>
+                                                                                     {act.title}
+                                                          </a>
+                                                      </li>))
+                                                }
+                                            </ul>
+                                        </div>
+                                    );
+                            }}/>
+        );
+    }
+}
+
+/* Render a usage bar showing props.stats[0] out of props.stats[1]
+ * bytes in use.  If the ratio is above props.critical, the bar will be
+ * in a dangerous color.
+ */
+
+class StorageUsageBar  extends React.Component {
+    render() {
+        var stats = this.props.stats;
+        var fraction = stats? stats[0] / stats[1] : null;
+
+        return (
+            <div className="progress">
+                { stats ?
+                <div className={ "progress-bar" + (fraction > this.props.critical ? " progress-bar-danger" : "") }
+                     style={{ width: fraction*100 + "%" }}>
+                </div>
+                  : null
+                }
+            </div>
+        );
+    }
+}
+
 module.exports = {
-    StorageAction: StorageAction,
     StorageButton: StorageButton,
     StorageLink:   StorageLink,
-
-    StorageBlockNavLink: StorageBlockNavLink
+    StorageBlockNavLink: StorageBlockNavLink,
+    StorageOnOff: StorageOnOff,
+    StorageMultiAction: StorageMultiAction,
+    StorageUsageBar: StorageUsageBar
 };

@@ -135,6 +135,8 @@ function deduplicate(list) {
 // Insert comma strings in between elements of the list. Unlike list.join(",")
 // this does not stringify the elements, which we need to keep as JSX objects.
 function insertCommas(list) {
+    if (list.length <= 1)
+        return list;
     return list.reduce((prev, cur) => [prev, ", ", cur])
 }
 
@@ -166,6 +168,14 @@ class Expander extends React.Component {
     }
 }
 
+function count_security_updates(updates) {
+    var num_security = 0;
+    for (let u in updates)
+        if (updates[u].security)
+           ++num_security;
+    return num_security;
+}
+
 function HeaderBar(props) {
     var num_updates = Object.keys(props.updates).length;
     var num_security = 0;
@@ -176,12 +186,14 @@ function HeaderBar(props) {
         return null;
 
     if (props.state == "available") {
-        state = cockpit.ngettext("$0 update", "$0 updates", num_updates);
-        for (let u in props.updates)
-            if (props.updates[u].security)
-                ++num_security;
-        if (num_security > 0)
-            state += cockpit.ngettext(", including $1 security fix", ", including $1 security fixes",  num_security);
+        num_security = count_security_updates(props.updates);
+        if (num_updates == num_security)
+            state = cockpit.ngettext("$1 security fix", "$1 security fixes", num_security);
+        else {
+            state = cockpit.ngettext("$0 update", "$0 updates", num_updates);
+            if (num_security > 0)
+                state += cockpit.ngettext(", including $1 security fix", ", including $1 security fixes",  num_security);
+        }
         state = cockpit.format(state, num_updates, num_security);
     } else {
         state = STATE_HEADINGS[props.state];
@@ -230,8 +242,10 @@ class UpdateItem extends React.Component {
         var security_info = null;
 
         if (info.bug_urls && info.bug_urls.length) {
+            // HACK: bug_urls also contains titles, in a not-quite-predictable order; ignore them, only pick out
+            // http[s] URLs (https://bugs.freedesktop.org/show_bug.cgi?id=104552)
             // we assume a bug URL ends with a number; if not, show the complete URL
-            bugs = insertCommas(info.bug_urls.map(url => (
+            bugs = insertCommas(info.bug_urls.filter(url => url.match(/^https?:\/\//)).map(url => (
                 <a rel="noopener" referrerpolicy="no-referrer" target="_blank" href={url}>
                     {url.match(/[0-9]+$/) || url}
                 </a>)
@@ -486,7 +500,7 @@ function AskRestart(props) {
 class OsUpdates extends React.Component {
     constructor() {
         super();
-        this.state = { state: "loading", errorMessages: [], updates: {}, haveSecurity: false, timeSinceRefresh: null,
+        this.state = { state: "loading", errorMessages: [], updates: {}, timeSinceRefresh: null,
                        loadPercent: null, waiting: false, cockpitUpdate: false, allowCancel: null,
                        history: null, unregistered: false, autoUpdatesEnabled: null };
         this.handleLoadError = this.handleLoadError.bind(this);
@@ -567,7 +581,7 @@ class OsUpdates extends React.Component {
                         u.security = true;
                     // u.restart = restart; // broken (always "1") at least in Fedora
 
-                    this.setState({ updates: this.state.updates, haveSecurity: this.state.haveSecurity || u.security });
+                    this.setState({ updates: this.state.updates });
                 },
 
                 Finished: () => this.setState({state: "available"}),
@@ -725,7 +739,7 @@ class OsUpdates extends React.Component {
                     this.setState({ applyTransaction: null, allowCancel: null });
 
                     if (exit === PK_EXIT_ENUM_SUCCESS) {
-                        this.setState({ state: "updateSuccess", haveSecurity: false, loadPercent: null });
+                        this.setState({ state: "updateSuccess", loadPercent: null });
                     } else if (exit === PK_EXIT_ENUM_CANCELLED) {
                         this.setState({ state: "loading", loadPercent: null });
                         this.loadUpdates();
@@ -800,12 +814,16 @@ class OsUpdates extends React.Component {
                             </div>
                         </div>);
                 } else {
+                    var num_updates = Object.keys(this.state.updates).length;
+                    var num_security_updates = count_security_updates(this.state.updates);
+
                     applyAll = (
                         <button className="btn btn-primary" onClick={ () => this.applyUpdates(false) }>
-                            {_("Install All Updates")}
+                            { num_updates == num_security_updates?
+                              _("Install Security Updates") : _("Install All Updates") }
                         </button>);
 
-                    if (this.state.haveSecurity) {
+                    if (num_security_updates > 0 && num_updates > num_security_updates) {
                         applySecurity = (
                             <button className="btn btn-default" onClick={ () => this.applyUpdates(true) }>
                                 {_("Install Security Updates")}

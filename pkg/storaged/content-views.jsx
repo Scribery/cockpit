@@ -22,7 +22,6 @@
 var cockpit = require("cockpit");
 var dialog = require("./dialog");
 var utils = require("./utils.js");
-var $ = require("jquery");
 
 var React = require("react");
 var CockpitListing = require("cockpit-components-listing.jsx");
@@ -38,6 +37,7 @@ var BlockVolTab     = require("./lvol-tabs.jsx").BlockVolTab;
 var PoolVolTab      = require("./lvol-tabs.jsx").PoolVolTab;
 var PVolTab         = require("./pvol-tabs.jsx").PVolTab;
 var MDRaidMemberTab = require("./pvol-tabs.jsx").MDRaidMemberTab;
+var VDOBackingTab   = require("./pvol-tabs.jsx").VDOBackingTab;
 var PartitionTab    = require("./part-tab.jsx").PartitionTab;
 var SwapTab         = require("./swap-tab.jsx").SwapTab;
 var UnrecognizedTab = require("./unrecognized-tab.jsx").UnrecognizedTab;
@@ -148,6 +148,8 @@ function create_tabs(client, target, is_partition) {
     } else if ((block && block.IdUsage == "raid") ||
                (block && client.mdraids[block.MDRaidMember])) {
         add_tab(_("RAID Member"), MDRaidMemberTab);
+    } else if (block && client.vdo_overlay.find_by_backing_block(block)) {
+        add_tab(_("VDO Backing"), VDOBackingTab);
     } else if (block && block.IdUsage == "other" && block.IdType == "swap") {
         add_tab(_("Swap"), SwapTab);
     } else if (block) {
@@ -321,6 +323,8 @@ function block_description(client, block) {
         } else {
             usage = C_("storage-id-desc", "Other Data");
         }
+    } else if (client.vdo_overlay.find_by_backing_block(block)) {
+        usage = C_("storage-id-desc", "VDO Backing");
     } else {
         usage = C_("storage-id-desc", "Unrecognized Data");
     }
@@ -331,7 +335,7 @@ function block_description(client, block) {
     };
 }
 
-function append_row(rows, level, key, name, desc, tabs, job_object) {
+function append_row(client, rows, level, key, name, desc, tabs, job_object) {
     // Except in a very few cases, we don't both have a button and
     // a spinner in the same row, so we put them in the same
     // place.
@@ -340,8 +344,7 @@ function append_row(rows, level, key, name, desc, tabs, job_object) {
     if (job_object)
         last_column = (
             <span className="spinner spinner-sm spinner-inline"
-                  style={{visibility: "hidden"}}
-                  data-job-object={job_object}>
+                  style={{visibility: client.path_jobs[job_object]? "visible" : "hidden"}}>
             </span>);
     if (tabs.row_action) {
         if (last_column) {
@@ -376,7 +379,7 @@ function append_non_partitioned_block(client, rows, level, block, is_partition) 
     tabs = create_tabs(client, block, is_partition);
     desc = block_description(client, block);
 
-    append_row(rows, level, block.path, utils.block_name(block), desc, tabs, block.path);
+    append_row(client, rows, level, block.path, utils.block_name(block), desc, tabs, block.path);
 
     if (cleartext_block)
         append_device(client, rows, level+1, cleartext_block);
@@ -418,7 +421,7 @@ function append_partitions(client, rows, level, block) {
             text: _("Extended Partition")
         };
         var tabs = create_tabs(client, partition.block, true);
-        append_row(rows, level, partition.block.path, utils.block_name(partition.block), desc, tabs, partition.block.path);
+        append_row(client, rows, level, partition.block.path, utils.block_name(partition.block), desc, tabs, partition.block.path);
         process_partitions(level + 1, partition.partitions);
     }
 
@@ -451,20 +454,12 @@ function block_rows(client, block) {
     return rows;
 }
 
-function block_content(client, block) {
-    if (!block)
-        return null;
-
-    var drive = client.drives[block.Drive];
-    if (drive)
-        block = client.drives_block[drive.path];
-
+function block_content(client, block, allow_partitions) {
     if (!block)
         return null;
 
     if (block.Size === 0)
         return null;
-
 
     function format_disk() {
         var usage = utils.get_active_usage(client, block.path);
@@ -516,12 +511,14 @@ function block_content(client, block) {
         });
     }
 
-    var format_disk_btn = (
-        <div className="pull-right">
-            <StorageButton onClick={format_disk} excuse={block.ReadOnly? _("Device is read-only") : null}>
-                {_("Create partition table")}
-            </StorageButton>
-        </div>);
+    var format_disk_btn = null;
+    if (allow_partitions)
+        format_disk_btn = (
+            <div className="pull-right">
+                <StorageButton onClick={format_disk} excuse={block.ReadOnly? _("Device is read-only") : null}>
+                    {_("Create partition table")}
+                </StorageButton>
+            </div>);
 
     return (
         <CockpitListing.Listing title={_("Content")}
@@ -532,43 +529,8 @@ function block_content(client, block) {
 }
 
 var Block = React.createClass({
-    getInitialState: function () {
-        return { block: null };
-    },
-    onClientChanged: function () {
-        this.setState({ block: this.props.client.slashdevs_block[this.props.name] });
-    },
-    componentDidMount: function () {
-        $(this.props.client).on("changed", this.onClientChanged);
-        this.onClientChanged();
-    },
-    componentWillUnmount: function () {
-        $(this.props.model).off("changed", this.onClientChanged);
-    },
     render: function () {
-        return block_content(this.props.client, this.state.block);
-    }
-});
-
-var MDRaid = React.createClass({
-    getInitialState: function () {
-        return { mdraid: null, block: null };
-    },
-    onClientChanged: function () {
-        var mdraid = this.props.client.uuids_mdraid[this.props.name];
-        var block = mdraid && this.props.client.mdraids_block[mdraid.path];
-        this.setState({ mdraid: mdraid, block: block });
-    },
-    componentDidMount: function () {
-        $(this.props.client).on("changed", this.onClientChanged);
-        this.onClientChanged();
-    },
-    componentWillUnmount: function () {
-        $(this.props.model).off("changed", this.onClientChanged);
-    },
-
-    render: function () {
-        return block_content(this.props.client, this.state.block);
+        return block_content(this.props.client, this.props.block, this.props.allow_partitions !== false);
     }
 });
 
@@ -580,7 +542,7 @@ function append_logical_volume_block(client, rows, level, block, lvol) {
             text: lvol.Name
         };
         tabs = create_tabs(client, block, false);
-        append_row(rows, level, lvol.Name, utils.block_name(block), desc, tabs, block.path);
+        append_row(client, rows, level, lvol.Name, utils.block_name(block), desc, tabs, block.path);
         append_partitions(client, rows, level+1, block);
     } else {
         append_non_partitioned_block (client, rows, level, block, false);
@@ -596,7 +558,7 @@ function append_logical_volume(client, rows, level, lvol) {
             text: _("Pool for Thin Volumes")
         };
         tabs = create_tabs (client, lvol, false);
-        append_row(rows, level, lvol.Name, lvol.Name, desc, tabs, false);
+        append_row(client, rows, level, lvol.Name, lvol.Name, desc, tabs, false);
         client.lvols_pool_members[lvol.path].forEach(function (member_lvol) {
             append_logical_volume (client, rows, level+1, member_lvol);
         });
@@ -615,7 +577,7 @@ function append_logical_volume(client, rows, level, lvol) {
                 text: lvol.Active? _("Unsupported volume") : _("Inactive volume")
             }
             tabs = create_tabs (client, lvol, false);
-            append_row(rows, level, lvol.Name, lvol.Name, desc, tabs, false);
+            append_row(client, rows, level, lvol.Name, lvol.Name, desc, tabs, false);
         }
     }
 }
@@ -630,26 +592,9 @@ function vgroup_rows(client, vgroup) {
 }
 
 var VGroup = React.createClass({
-    getInitialState: function () {
-        return { vgroup: null };
-    },
-    onClientChanged: function () {
-        this.setState({ vgroup: this.props.client.vgnames_vgroup[this.props.name] });
-    },
-    componentDidMount: function () {
-        $(this.props.client).on("changed", this.onClientChanged);
-        this.onClientChanged();
-    },
-    componentWillUnmount: function () {
-        $(this.props.model).off("changed", this.onClientChanged);
-    },
-
     render: function () {
         var self = this;
-        var vgroup = self.state.vgroup;
-
-        if (!vgroup)
-            return null;
+        var vgroup = this.props.vgroup;
 
         function create_logical_volume() {
             if (vgroup.FreeSize == 0)
@@ -744,6 +689,5 @@ var VGroup = React.createClass({
 
 module.exports = {
     Block: Block,
-    MDRaid: MDRaid,
     VGroup: VGroup
 };

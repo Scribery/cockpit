@@ -269,11 +269,14 @@ else
   AC_MSG_ERROR(no. Please install intltool package)
 fi
 
-# phantomjs
+# chromium - same as test/common/cdp.py
 
-AC_PATH_PROG([PHANTOMJS], [phantomjs], [], [$srcdir/node_modules/.bin$PATH_SEPARATOR$PATH])
-AM_CONDITIONAL([WITH_PHANTOMJS], [test -n "$PHANTOMJS"])
-AC_SUBST([PHANTOMJS])
+AC_PATH_PROGS([CHROMIUM], [chromium-browser chrome], [], [$srcdir/node_modules/chromium/lib/chromium/chrome-linux/chrome$PATH_SEPARATOR$PATH])
+if test -z "$CHROMIUM"; then
+  AC_PATH_PROG([CHROMIUM], [headless_shell], [], [/usr/lib/chromium-browser$PATH_SEPARATOR/usr/lib64/chromium-browser])
+fi
+AM_CONDITIONAL([WITH_CHROMIUM], [test -n "$CHROMIUM"])
+AC_SUBST([CHROMIUM])
 
 # go
 
@@ -454,19 +457,6 @@ else
 fi
 
 AM_CONDITIONAL([ENABLE_DOC], [test "$enable_doc" = "yes"])
-
-# Branding
-
-AC_MSG_CHECKING([for branding directory])
-AC_ARG_WITH(branding,
-            AC_HELP_STRING([--with-branding=auto],
-                           [Specify which branding to use.  A value of "default" means upstream branding.])
-)
-BRAND=${with_branding:-auto}
-AC_MSG_RESULT($BRAND)
-if test "$BRAND" != "auto"; then
-  AC_DEFINE_UNQUOTED([PACKAGE_BRAND], ["$BRAND"], [Which brand to show.])
-fi
 
 # Debug
 

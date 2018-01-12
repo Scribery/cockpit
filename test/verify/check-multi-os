@@ -186,7 +186,7 @@ class TestMultiOS(MachineCase):
     def testFedora22(self):
         try:
             self.checkStock()
-        except Error, e:
+        except Error as e:
             # Old versions of Cockpit in Fedora 22 have a race which throws an exception
             if e.msg != "Error: TypeError: null is not an object (evaluating 'o.client.lookup')":
                 raise
@@ -239,7 +239,9 @@ class TestMultiOSDirect(MachineCase):
         b.switch_to_top()
 
         # Branding uses default because there is no os information
-        b.wait_in_text("#index-brand", "Cockpit")
+        b.wait_present("#index-brand")
+        b.wait_not_present("#index-brand.hide-before")
+
         b.wait_js_cond('window.location.pathname.indexOf("shell/index.html") > -1')
 
 if __name__ == '__main__':

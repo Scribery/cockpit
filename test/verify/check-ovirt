@@ -36,7 +36,6 @@ VIRSH_CONNECTION_URI = "qemu+tcp://10.111.113.5/system"
 OVIRT_USER = "admin@internal"
 OVIRT_PWD = "engine"
 CA_PEM_FILE = '/etc/pki/vdsm/certs/cacert.pem'
-COCKPIT_DIR = '/usr/share/cockpit'
 VDSM_CONF_FILE = '/etc/vdsm/vdsm.conf'
 
 WAIT_SCRIPT = """
@@ -52,7 +51,7 @@ done
 
 TEST_VDSM_CONF_CONTENT = "Dummy content of the vdsm.conf file"
 
-@skipImage("No oVirt release", "continuous-atomic", "debian-stable", "debian-testing", "fedora-25", "fedora-i386", "fedora-atomic", "rhel-atomic", "fedora-testing", "ubuntu-1604", "ubuntu-stable")
+@skipImage("No oVirt release", "continuous-atomic", "debian-stable", "debian-testing", "fedora-i386", "fedora-atomic", "rhel-atomic", "fedora-testing", "ubuntu-1604", "ubuntu-stable")
 class TestOVirtMachines(MachineCase):
     provision = {
         "0": { "address": "10.111.113.1/20" },
@@ -65,6 +64,11 @@ class TestOVirtMachines(MachineCase):
         MachineCase.setUp(self)
         self.ovirt = self.machines['ovirt']
         m = self.machine
+
+        m.execute("hostname ovirt.cockpit.lan") # used as fallback when resolving based on browser's URL is not matching, see ovirt/helpers.es6:getHost()
+
+        self.engine_url = "https://{0}/ovirt-engine/".format(self.ovirt.forward['443']) # from phantomJS
+        print(("Engine URL: {0}".format(self.engine_url)))
 
         # Wait for the web service to be accessible
         args = { "api": "curl -s -k -u admin@internal:engine -H Content-type:application/xml", "addr": OVIRT_ADDR }
@@ -89,7 +93,7 @@ class TestOVirtMachines(MachineCase):
         cmd = "{0} https://{1}/ovirt-engine/api/datacenters/{2} | xmllint --xpath \"string(/data_center/status)\" -".format(curl, OVIRT_ADDR, dc_id)
         status = m.execute(cmd)
         if status != "up":
-            print("Data Center status: {0}, waiting for automatic reactivation".format(status))
+            print(("Data Center status: {0}, waiting for automatic reactivation".format(status)))
             wait(lambda: "up" in m.execute(cmd), delay=10)
 
     def enforce_cockpit_ovirt(self):
@@ -103,17 +107,19 @@ class TestOVirtMachines(MachineCase):
         # In case of passing this initialization step via UI, a series of redirects (oVirt verification and authentication) would follow.
         # The installation dialog calls 'ovirt/install.sh' script, so this simplification is acceptable for the test.
         m = self.machine
-        m.execute("bash /usr/share/cockpit/ovirt/install.sh {0} {1} {2} {3}".format(ENGINE_FQDN, ENGINE_PORT, COCKPIT_DIR, VIRSH_CONNECTION_URI))
-        m.execute("sed -i 's/false/true/' /etc/cockpit/machines-ovirt.config") # turn on debug messages
+
+        m.execute("bash /usr/share/cockpit/ovirt/install.sh {0} {1} {2}".format(ENGINE_FQDN, ENGINE_PORT, VIRSH_CONNECTION_URI))
+        # m.execute("sed -i 's/false/true/' /etc/cockpit/machines-ovirt.config") # turn on debug messages
+
         self.access_token = self.get_ovirt_token()
 
     def get_ovirt_token(self):
         m = self.machine
         response = m.execute("curl --insecure -H 'Accept: application/json' --data 'grant_type=password&scope=ovirt-app-api&username={0}&password={1}' https://{2}:{3}/ovirt-engine/sso/oauth/token".format(OVIRT_USER, OVIRT_PWD, ENGINE_FQDN, ENGINE_PORT))
-        print response
+        print(response)
         data = json.loads(response)
         token = data['access_token']
-        print("oVirt token retrieved: {0}".format(token))
+        print(("oVirt token retrieved: {0}".format(token)))
         return token
 
     def hack_for_missing_vdsm(self):
@@ -144,6 +150,8 @@ class TestOVirtMachines(MachineCase):
         b.wait_present("#vm-VM-vcpus")
         b.wait_in_text("#vm-VM-vcpus", "1")
 
+        b.wait_not_present("#vm-VM-delete") # oVirt-managed VM can not be deleted from Cockpit
+
         b.wait_present("#vm-VM-ovirt-description") # oVirt specific extension
         b.wait_present("#vm-VM-ovirt-suspendbutton") # oVirt specific extension
 
@@ -170,21 +178,20 @@ class TestOVirtMachines(MachineCase):
 
         # switch to cluster view and check expected cluster content
         b.click("#ovirt-topnav-clustervms")
-        b.wait_in_text("body", "Cluster Virtual Machines")
+        b.wait_in_text("body", "Virtual Machines of Default cluster")
         b.wait_in_text("tr.listing-ct-item > th", "VM") # name
-        b.wait_in_text("tr.listing-ct-item > td:nth-child(4)", "Default") # cluster
-        b.wait_in_text("tr.listing-ct-item > td:nth-child(5)", "Blank") # template
-        b.wait_in_text("tr.listing-ct-item > td:nth-child(6)", "1 GiB") # memory
-        b.wait_in_text("tr.listing-ct-item > td:nth-child(8)", "other") # OS
-        b.wait_in_text("tr.listing-ct-item > td:nth-child(9)", "no") # HA
+        b.wait_in_text("tr.listing-ct-item > td:nth-child(4)", "Blank") # template
+        b.wait_in_text("tr.listing-ct-item > td:nth-child(5)", "1 GiB") # memory
+        b.wait_in_text("tr.listing-ct-item > td:nth-child(7)", "other") # OS
+        b.wait_in_text("tr.listing-ct-item > td:nth-child(8)", "no") # HA
         with b.wait_timeout(180):
-            b.wait_in_text("tr.listing-ct-item > td:nth-child(13)", "shut off") # state
+            b.wait_in_text("tr.listing-ct-item > td:nth-child(12)", "shut off") # state
 
         b.click("button.dropdown-toggle") # caret for 'Run|Run Here'
         b.wait_visible("a:contains('Run Here')")
         b.click("a:contains('Run Here')") # start the VM on this host
         with b.wait_timeout(180):
-            b.wait_in_text("tr.listing-ct-item > td:nth-child(11)", "host") # Host of name 'host'
+            b.wait_in_text("tr.listing-ct-item > td:nth-child(10)", "host") # Host of name 'host'
 
         # switch back to VM list and check
         b.click("#ovirt-topnav-hostvms")
@@ -198,7 +205,7 @@ class TestOVirtMachines(MachineCase):
 
         # switch to Templates
         b.click("#ovirt-topnav-clustertemplates")
-        b.wait_in_text("body", "Cluster Templates")
+        b.wait_in_text("body", "Templates of Default cluster")
         b.wait_in_text("tr.listing-ct-item > th", "Blank") # name
         b.wait_in_text("tr.listing-ct-item > td:nth-child(4)", "Blank") # Base Template
         b.wait_in_text("tr.listing-ct-item > td:nth-child(5)", "Blank template") # Description
@@ -222,12 +229,28 @@ class TestOVirtMachines(MachineCase):
         self.wait_for_dc() # make sure the ovirt's DC is up before new VM is created
         b.click("button:contains('Create')") # create a VM from Blank template
 
-        # check the just created VM
+        # check error message by attempt to create a VM with existing name
+        b.wait_present("button:contains('Create VM')")
+        b.click("button:contains('Create VM')")
+        b.wait_present("input.form-control")
+        b.set_val("input.form-control", "VM") # the 'VM' machine exists already
+        # assuming the DC is still up - otherwise its environment issue
+        b.click("button:contains('Create')") # expected to fail here
+        b.wait_present("#clustervm-Blank-actionerror")
+        b.wait_in_text("#clustervm-Blank-actionerror", "CREATE VM action failed")
+
+        # check the VM created in previous step
         b.click("#ovirt-topnav-clustervms")
-        b.wait_in_text("body", "Cluster Virtual Machines")
+        b.wait_in_text("body", "Virtual Machines of Default cluster")
         with b.wait_timeout(180):
             b.wait_present("table > tbody:nth-child(4) > tr.listing-ct-item > th") # at least two VMs are listed
         b.wait_in_text("table > tbody:nth-child(4) > tr.listing-ct-item > th", "myVMFromBlankTemplate") # check 'name' of the second one
+
+        # check error message by attempt to run an unexecutable VM
+        b.wait_present("#cluster-myVMFromBlankTemplate-run") # run button
+        b.click("#cluster-myVMFromBlankTemplate-run") # expected to fail
+        b.wait_present("#clustervm-myVMFromBlankTemplate-actionerror")
+        b.wait_in_text("#clustervm-myVMFromBlankTemplate-actionerror", "START action failed")
 
         # switch to VDSM view
         b.click("#ovirt-topnav-vdsm")
@@ -238,6 +261,36 @@ class TestOVirtMachines(MachineCase):
         b.wait_present("button:contains('OK')")
         b.click("button:contains('OK')")  # Limitation of this test env: In fact self.machine is updated and not the VDSM, see hack_for_missing_vdsm().
         b.wait(lambda: TEST_VDSM_CONF_CONTENT in self.machine.execute("cat {0}".format(VDSM_CONF_FILE)))
+
+        # sit(self.machines)
+
+    def testHostToMaintenance(self):
+        b = self.browser
+
+        # By-passing the ovirt-authentication cycle of redirects by retrieving oVirt SSO token independently
+        # and navigating directly to the last step of auth procedure by passing the '#token=' URL param
+        self.login_and_go("/machines#token={0}".format(self.access_token))
+        b.wait_present(".main-app-div")
+        b.wait_in_text("body", "Virtual Machines")
+
+        b.wait_in_text("tbody tr th", "VM") # row with a vitual machine
+        b.wait_present("#ovirt-host-to-maintenance")
+        b.click("#ovirt-host-to-maintenance")
+
+        b.wait_present("#cockpit_modal_dialog")
+        b.wait_present("#cockpit_modal_dialog div:contains(Switch Host to Maintenance)")
+        b.click("#cockpit_modal_dialog button:contains(OK)")
+
+        # Since the test environment has just a single host, the action can not succeed on oVirt side - there is no
+        # remaining host to migrate the VM to or reassign SPM. In addition, the test environment is based on faqemu (fake qemu).
+        # Building of full-featured test environment seems to be not worth of the effort recently since we are not
+        # testing the oVirt itself but pkg/ovirt and it's connection to oVirt API.
+        #
+        # For this reason the test checks just for rendered error which is produced by oVirt API to verify proper action
+        # calling and processing on pkg/ovirt side.
+        b.wait_in_text(".modal-footer", "The following Hosts have running VMs and cannot be switched to maintenance mode: host.Please ensure that the following Clusters have at least one Host in UP state: Default.")
+        b.click("#cockpit_modal_dialog button:contains(Cancel)")
+        b.wait_not_present("#cockpit_modal_dialog")
 
         # sit(self.machines)
 

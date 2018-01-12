@@ -23,11 +23,7 @@ import sys
 
 base_dir = os.path.dirname(os.path.realpath(__file__))
 test_dir = os.path.abspath(os.path.join(base_dir, ".."))
-
-try:
-    import testlib
-except:
-    sys.path.append(test_dir)
+sys.path.append(test_dir)
 
 from common.testlib import *
 from common.testvm import VirtMachine
@@ -94,7 +90,6 @@ class TestKubernetesLogin(KubernetesContainerCase):
         self.browser.wait_visible('#login-button')
 
     def check_login(self, mode):
-        m = self.machine
         b = self.browser
 
         if self.get_bad_auth_code(port=6443) == "403":
@@ -120,7 +115,7 @@ class TestKubernetesLogin(KubernetesContainerCase):
         b.wait_visible('#login-button')
 
         self.login("admin", "fubar")
-        with b.wait_timeout(10) as r:
+        with b.wait_timeout(10):
             b.expect_load()
         b.wait_present("#content")
         b.wait_text('#content-user-name', 'admin')
@@ -185,6 +180,7 @@ class TestKubernetesLogin(KubernetesContainerCase):
             self.restart_api_server(port=6443, scheme='https')
 
         b.reload()
+        b.expect_load_frame("cockpit1:localhost/kubernetes")
         b.wait_present("#content")
         b.wait_text('#content-user-name', 'Unauthenticated')
         b.wait_in_text("title", "Kubernetes Cockpit")
@@ -214,13 +210,13 @@ class KubernetesCase(KubernetesContainerCase, kubelib.KubernetesCommonTests):
 
     def check_logs(self, b):
         if not self.supports_websocket:
-            print "No websocket support on kubernetes yet"
+            print("No websocket support on kubernetes yet")
         else:
             super(KubernetesCase, self).check_logs(b)
 
     def check_shell(self, b):
         if not self.supports_websocket:
-            print "No websocket support on kubernetes yet"
+            print("No websocket support on kubernetes yet")
         else:
             super(KubernetesCase, self).check_shell(b)
 

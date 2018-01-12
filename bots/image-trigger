@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 # This file is part of Cockpit.
@@ -25,7 +25,6 @@ REFRESH = {
     "continuous-atomic": { },
     "debian-testing": { },
     "debian-stable": { },
-    "fedora-25": { },
     "fedora-26": { },
     "fedora-27": { },
     "fedora-atomic": { },
@@ -37,6 +36,7 @@ REFRESH = {
     "ipa": { "refresh-days": 120 },
     'rhel-7': { },
     'rhel-7-4': { },
+    'rhel-7-5': { },
     'rhel-atomic': { },
     'windows-8': { "refresh-days": 30 },
 }
@@ -46,6 +46,7 @@ import os
 import sys
 import tempfile
 import time
+import subprocess
 
 sys.dont_write_bytecode = True
 
@@ -62,7 +63,7 @@ def main():
 
     try:
         results = scan(api, opts.image, opts.verbose)
-    except RuntimeError, ex:
+    except RuntimeError as ex:
         sys.stderr.write("image-trigger: " + str(ex) + "\n")
         return 1
 
@@ -88,6 +89,7 @@ def scan_for_prune():
     return tasks
 
 def scan(api, force, verbose):
+    subprocess.check_call([ "git", "fetch", "origin", "master" ])
     for (image, options) in REFRESH.items():
         perform = False
 
@@ -95,7 +97,7 @@ def scan(api, force, verbose):
             perform = image == force
         else:
             days = options.get("refresh-days", DAYS)
-            perform = task.stale(days, os.path.join("bots", "images", image))
+            perform = task.stale(days, os.path.join("bots", "images", image), "origin/master")
 
         if perform:
             text = "Image refresh for {0}".format(image)

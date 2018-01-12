@@ -54,574 +54,12 @@
 
   <!-- OVERVIEW -->
 
-  <script id="mdraids-tmpl" type="x-template/mustache">
-    <div class="panel panel-default">
-      <div class="panel-heading">
-        <span class="pull-right">
-          <button id="create-mdraid" class="btn btn-primary fa fa-plus"></button>
-        </span>
-        <span translatable="yes">RAID Devices</span>
-      </div>
-      {{#HasMDRaids}}
-      <table class="table table-hover">
-        {{#MDRaids}}
-        <tr data-goto-mdraid={{UUID}}>
-          <td class="storage-icon">
-            <div><img  src="images/storage-array.png"></div>
-          </td>
-          <td class="row">
-            <span class="col-md-12 storage-disk-name">{{Name}}</span>
-            <br>
-            <span class="col-md-12 col-lg-5 storage-disk-size">{{Size}}</span>
-          </td>
-          <td class="storage-icon">
-            <div class="spinner spinner-sm" data-job-object="{{path}}"></div>
-          </td>
-        </tr>
-        {{/MDRaids}}
-      </table>
-      {{/HasMDRaids}}
-      {{^HasMDRaids}}
-      <div translatable="yes" class="empty-panel-text">No storage set up as RAID</div>
-      {{/HasMDRaids}}
-    </div>
-  </script>
-
-  <script id="vgroups-tmpl" type="x-template/mustache">
-    <div class="panel panel-default">
-      <div class="panel-heading">
-        <span class="pull-right">
-          <button id="create-volume-group" class="btn btn-primary fa fa-plus"></button>
-        </span>
-        <span translatable="yes">Volume Groups</span>
-      </div>
-      {{#HasVGroups}}
-      <table class="table table-hover">
-        {{#VGroups}}
-        <tr data-goto-vgroup={{Name}}>
-          <td class="storage-icon">
-            <div><img  src="images/storage-array.png"></div>
-          </td>
-          <td class="row">
-            <span class="col-md-12 storage-disk-name">{{Name}}</span>
-            <br>
-            <span class="col-md-12 col-lg-5 storage-disk-size">{{Size}}</span>
-          </td>
-          <td class="storage-icon">
-            <div class="spinner spinner-sm" data-job-object="{{path}}"></div>
-          </td>
-        </tr>
-        {{/VGroups}}
-      </table>
-      {{/HasVGroups}}
-      {{^HasVGroups}}
-      <div translatable="yes" class="empty-panel-text">No volume groups created</div>
-      {{/HasVGroups}}
-    </div>
-  </script>
-
-  <script id="iscsi-sessions-tmpl" type="x-template/mustache">
-    <div class="panel panel-default arming-zone">
-      <div class="panel-heading">
-        <span class="pull-right">
-          {{#HasSessions}}
-          <button class="btn btn-default fa fa-check arm-button"></button>
-          {{/HasSessions}}
-          <button data-action="edit-iscsi" class="btn btn-default pficon pficon-edit"></button>
-          <button data-action="add-iscsi-portal" class="btn btn-primary fa fa-plus"></button>
-        </span>
-        <span translatable="yes">iSCSI Targets</span>
-      </div>
-      {{#HasSessions}}
-      <table class="table">
-        {{#Sessions}}
-        <tr>
-          <td class="storage-icon">
-            <div><img  src="images/storage-array.png"></div>
-          </td>
-          <td class="row">
-            <span class="col-md-12">{{Name}}</span>
-            <br>
-            <span class="col-md-12 col-lg-5">{{Address}}:{{Port}}</span>
-          </td>
-          <td class="storage-icon">
-            <button class="btn btn-danger pficon pficon-delete btn-delete needs-arming"
-                    data-iscsi-session-remove="{{path}}">
-          </td>
-        </tr>
-        {{/Sessions}}
-      </table>
-      {{/HasSessions}}
-      {{^HasSessions}}
-      <div translatable="yes" class="empty-panel-text">No iSCSI targets set up</div>
-      {{/HasSessions}}
-    </div>
-  </script>
-
-  <script id="drives-tmpl" type="x-template/mustache">
-    <div class="panel panel-default">
-      <div class="panel-heading">
-        <span translatable="yes">Drives</span>
-      </div>
-      {{#HasDrives}}
-      <table class="table table-hover">
-        {{#Drives}}
-        <tr data-goto-block={{dev}} {{#Highlight}}class="highlight-ct"{{/Highlight}}>
-          <td class="storage-icon">
-            <div><img  src="images/storage-disk.png"></div>
-          </td>
-          <td class="row">
-            <span class="col-md-12">{{Name}}</span>
-            <br>
-            <span class="col-md-12 col-lg-5 storage-disk-size">{{Description}}</span>
-            <span class="col-md-12 col-lg-7">
-              <span>R: {{ReadRate}}</span>
-              <span class="rate-gap"></span>
-              <span>W: {{WriteRate}}</span>
-            </span>
-          </td>
-          <td class="storage-icon">
-            <div class="spinner spinner-sm" data-job-object="{{path}}"></div>
-          </td>
-        </tr>
-        {{/Drives}}
-      </table>
-      {{/HasDrives}}
-      {{^HasDrives}}
-      <div translatable="yes" class="empty-panel-text">No drives attached</div>
-      {{/HasDrives}}
-    </div>
-  </script>
-
-  <script id="others-tmpl" type="x-template/mustache">
-    {{#HasOthers}}
-    <div class="panel panel-default">
-      <div class="panel-heading">
-        <span translatable="yes">Other Devices</span>
-      </div>
-      <table class="table table-hover">
-        {{#Others}}
-        <tr data-goto-block={{dev}}>
-          <td class="storage-icon">
-            <div class="spinner spinner-sm" data-job-object="{{path}}"></div>
-          </td>
-          <td class="row">
-            <span class="col-md-12 storage-disk-name">{{Name}}</span>
-            <br>
-            <span class="col-md-12 col-lg-5 storage-disk-size">{{Description}}</span>
-          </td>
-        </tr>
-        {{/Others}}
-      </table>
-    </div>
-    {{/HasOthers}}
-  </script>
-
-  <script id="mounts-tmpl" type="x-template/mustache">
-    <div class="panel panel-default storage-mounts">
-      <div class="panel-heading">
-        <span translatable="yes">Filesystems</span>
-      </div>
-      <table class="table table-hover">
-        <thead>
-          <tr>
-            <th class="mount-name" translatable="yes">Name</th>
-            <th class="mount-point" translatable="yes">Mount Point</th>
-            <th class="mount-size-graph" translatable="yes">Size</th>
-            <th class="mount-size-number">&nbsp;</th>
-          </tr>
-        </thead>
-        <tbody id="storage_mounts">
-          {{#Mounts}}
-          <tr {{#LinkTarget}}data-goto-{{type}}="{{target}}"{{/LinkTarget}}>
-            <td>
-              {{Name}}
-            </td>
-            {{#IsMounted}}
-            <td>
-              {{#MountPoints}}
-              <div>{{.}}</div>
-              {{/MountPoints}}
-            </td>
-            <td>
-              <div class="progress">
-                <div class="progress-bar {{#UsageCritical}}progress-bar-danger{{/UsageCritical}}"
-                     data-width="{{UsagePercent}}%">
-                </div>
-              </div>
-            </td>
-            <td class="usage-text">
-              {{UsageText}}
-            </td>
-            {{/IsMounted}}
-            {{^IsMounted}}
-            <td>
-              -
-            </td>
-            <td>
-            </td>
-            <td class="usage-text">
-              {{DeviceSize}}
-            </td>
-            {{/IsMounted}}
-          </tr>
-          {{/Mounts}}
-        </tbody>
-      </table>
-    </div>
-  </script>
-
-  <script id="jobs-tmpl" type="x-template/mustache">
-    {{#HasJobs}}
-    <div class="panel panel-default">
-      <div class="panel-heading">
-        <span translatable="yes">Jobs</span>
-      </div>
-      <table class="table">
-        {{#Jobs}}
-        <tr>
-          <td class="job-description">{{Description}}</td>
-          <td class="job-status">{{#Progress}}{{.}}{{/Progress}}</td>
-          <td class="job-status">{{#RemainingTime}}{{.}}{{/RemainingTime}}</td>
-          <td class="job-action">
-            {{#Cancelable}}<button translatable="yes" class="btn btn-default" data-action="job_cancel" data-arg="{{path}}">Cancel</button>{{/Cancelable}}
-          </td>
-        </tr>
-        {{/Jobs}}
-      </table>
-    </div>
-    {{/HasJobs}}
-  </script>
-
   <div id="storage" hidden>
-    <div class="col-md-8 col-lg-9 page-ct">
-      <div id="storage-graph-toolbar" class="zoom-controls standard-zoom-controls">
-        <div class="dropdown">
-          <button class="btn btn-default dropdown-toggle" data-toggle="dropdown">
-            <span></span>
-            <div class="caret"></div>
-          </button>
-          <ul class="dropdown-menu" role="menu">
-            <li role="presentation"><a role="menuitem" tabindex="-1" data-action="goto-now" translatable="yes">Go to now</a></li>
-            <li role="presentation" class="divider"></li>
-            <li role="presentation"><a role="menuitem" tabindex="-1" data-range="300" translatable="yes">5 minutes</a></li>
-            <li role="presentation"><a role="menuitem" tabindex="-1" data-range="3600" translatable="yes">1 hour</a></li>
-            <li role="presentation"><a role="menuitem" tabindex="-1" data-range="21600" translatable="yes">6 hours</a></li>
-            <li role="presentation"><a role="menuitem" tabindex="-1" data-range="86400" translatable="yes">1 day</a></li>
-            <li role="presentation"><a role="menuitem" tabindex="-1" data-range="604800" translatable="yes">1 week</a></li>
-          </ul>
-        </div>
-        <button class="btn btn-default" data-action="zoom-out">
-          <span class="glyphicon glyphicon-zoom-out"></span>
-        </button>
-        <div class="btn-group">
-          <button class="btn btn-default fa fa-angle-left" data-action="scroll-left"></button>
-          <button class="btn btn-default fa fa-angle-right" data-action="scroll-right"></button>
-        </div>
-      </div>
-      <div class="row">
-        <div class="col-sm-6 storage-reading-graph-container">
-          <div>
-            <span class="plot-unit" id="storage-reading-unit"></span><span class="plot-title" translatable="yes">Reading</span>
-          </div>
-          <div id="storage-reading-graph" class="zoomable-plot"></div>
-        </div>
-        <div class="col-sm-6 storage-writing-graph-container">
-          <div>
-            <span class="plot-unit" id="storage-writing-unit"></span><span class="plot-title" translatable="yes">Writing</span>
-          </div>
-          <div id="storage-writing-graph" class="zoomable-plot"></div>
-        </div>
-      </div>
-      <br/>
-      <div id="mounts"></div>
-      <div id="jobs"></div>
-      <div class="panel panel-default cockpit-log-panel">
-        <div class="panel-heading" translatable="yes">Storage Logs</div>
-        <div class="panel-body" id="storage-log"></div>
-      </div>
-    </div>
-
-    <div class="col-md-4 col-lg-3 storage-sidebar page-ct">
-      <div id="mdraids"></div>
-      <div id="vgroups"></div>
-      <div id="iscsi-sessions"></div>
-      <div id="drives"></div>
-      <div id="others"></div>
-      <div id="jobs"></div>
-    </div>
   </div>
 
   <!-- DETAIL -->
 
-  <script id="action-btn-tmpl"  type="x-template/mustache">
-    <div class="btn-group">
-      <button data-action="{{def.action}}" data-arg="{{arg}}" class="btn btn-default storage-privileged">{{def.title}}</button>
-      <button class="btn btn-default dropdown-toggle storage-privileged" data-toggle="dropdown">
-        <span class="caret"></span>
-      </button>
-      <ul class="dropdown-menu action-dropdown-menu" role="menu">
-        {{#actions}}
-        <li class="presentation">
-          <a class="{{#disabled}}disabled{{/disabled}}"
-             data-action="{{action}}" data-arg="{{arg}}" role="menuitem">{{title}}</a>
-        </li>
-        {{/actions}}
-      </ul>
-    </div>
-  </script>
-
-  <script id="content-tmpl" type="x-template/mustache">
-    <div class="panel panel-default" id="content">
-      <div class="panel-heading">
-        <span>{{Title}}</span>
-        {{#path}}
-        <button class="btn btn-default storage-privileged pull-right" translatable="yes"
-                data-action="format_disk" data-arg="{{path}}">Create partition table</button>
-        {{/path}}
-      </div>
-      <ul class="list-group">
-        {{#Entries}}
-        <li class="list-group-item content-item">
-          <table>
-            <tr>
-              <td width="50%" class="content-level-{{Level}}">
-                {{{Description}}}
-              </td>
-              <td class="content-name">{{Name}}</td>
-              <td class="content-action">
-                <div>
-                  <div class="spinner spinner-sm" data-job-object="{{job_object}}"></div>
-                </div>
-                {{{Button}}}
-              </td>
-            </tr>
-          </table>
-        {{/Entries}}
-      </ul>
-    </div>
-  </script>
-
-  <script id="block-detail-tmpl" type="x-template/mustache">
-    <div class="panel panel-default">
-      <div class="panel-heading">
-        {{#Drive}}
-        <span translatable="yes">Drive</span>
-        {{/Drive}}
-        {{^Drive}}
-        <span translatable="yes">Block Device</span>
-        {{/Drive}}
-      </div>
-      <div class="panel-body">
-        <table class="info-table-ct">
-          {{#Drive}}
-          <tr>
-            <td translatable="yes" context="storage">Model</td>
-            <td>{{dbus.Model}}</td>
-          </tr>
-          {{#dbus.Revision}}
-          <tr>
-            <td translatable="yes" context="storage">Firmware Version</td>
-            <td>{{.}}</td>
-          </tr>
-          {{/dbus.Revision}}
-          {{#dbus.Serial}}
-          <tr>
-            <td translatable="yes" context="storage">Serial Number</td>
-            <td>{{.}}</td>
-          </tr>
-          {{/dbus.Serial}}
-          {{#dbus.WWN}}
-          <tr>
-            <td translatable="yes" context="storage">World Wide Name</td>
-            <td>{{.}}</td>
-          </tr>
-          {{/dbus.WWN}}
-          <tr>
-            <td translatable="yes" context="storage">Capacity</td>
-            <td>
-              {{#Size}}{{.}}{{/Size}}
-              {{^Size}}<span translatable="yes">No media inserted</span>{{/Size}}
-            </td>
-          </tr>
-          {{#Assessment}}
-          <tr>
-            <td translatable="yes" context="storage">Assessment</td>
-            <td>
-              {{#Failing}}
-              <span translatable="yes" class="cockpit-disk-failing">DISK IS FAILING</span>
-              {{/Failing}}
-              {{^Failing}}
-              <span translatable="yes">Disk is OK</span>
-              {{/Failing}}
-              {{#Temperature}}
-              <span> ({{.}})</span>
-              {{/Temperature}}
-            </td>
-          </tr>
-          {{/Assessment}}
-          {{^Multipath}}
-          <tr>
-            <td translatable="yes" context="storage">Device File</td>
-            <td>{{Device}}</td>
-          </tr>
-          {{/Multipath}}
-          {{#Multipath}}
-          <tr>
-            <td translatable="yes" context="storage">Device File</td>
-            <td>
-              <!-- There are three interesting cases here for a
-                   multipath device:
-
-                   a) Everything is setup as expected and there is a
-                      master device which we can show.
-
-                   b) The multipathd service isn't running and there
-                      is no master device.  In this case, there is a
-                      big alert at the top of the page that tells the
-                      user about multipathd not running, so we just
-                      show a "-" as the device.
-
-                   c) The multipathd service _is_ running but there
-                      _still_ is no master device.  Something is
-                      wrong, but we have no idea what and can't offer
-                      any good advise or help with fixing it.  Thus,
-                      we also show "-" in this case.  In the future,
-                      with a richer multipath API, we can hopefully
-                      offer better explanations and useful knobs for
-                      fixing things.
-
-                   Although case b) and c) show the same thing, we
-                   keep them separate in the markup so that it is easy
-                   to change our minds.
-                -->
-              {{#Device}}{{.}}{{/Device}}                <!-- a) -->
-              {{^Device}}
-              {{^MultipathActive}}-{{/MultipathActive}}  <!-- b) -->
-              {{#MultipathActive}}-{{/MultipathActive}}  <!-- c) -->
-              {{/Device}}
-            </td>
-          </tr>
-          <tr>
-            <td translatable="yes" context="storage">Multipathed Devices</td>
-            <td>{{#Devices}}{{.}} {{/Devices}}</td>
-          </tr>
-          {{/Multipath}}
-          {{/Drive}}
-          {{^Drive}}
-          <tr>
-            <td translatable="yes" context="storage">Device File</td>
-            <td>{{Block.Name}}</td>
-          </tr>
-          <tr>
-            <td translatable="yes" context="storage">Capacity</td>
-            <td>{{Block.Size}}</td>
-          </tr>
-          {{/Drive}}
-        </table>
-      </div>
-    </div>
-  </script>
-
-  <script id="mdraid-detail-tmpl" type="x-template/mustache">
-    {{#MDRaid.Degraded}}
-    <div class="alert alert-danger">
-      <span class="pficon pficon-error-circle-o"></span>
-      <span translatable="yes">The RAID Array is in a degraded state</span> - {{.}}
-    </div>
-    {{/MDRaid.Degraded}}
-    <div class="panel panel-default">
-      <div class="panel-heading">
-        {{#MDRaid}}<span>{{Name}}</span> {{/MDRaid}}<span translatable="yes">RAID Device</span>
-        <span class="pull-right">{{{MDRaidButton}}}</span>
-      </div>
-      {{#MDRaid}}
-      <div class="panel-body">
-        <table class="info-table-ct">
-          <tr>
-            <td translatable="yes" context="storage">Device</td>
-            <td>{{Block.Device}}</td>
-          </tr>
-          <tr>
-            <td translatable="yes" context="storage">UUID</td>
-            <td>{{dbus.UUID}}</td>
-          </tr>
-          <tr>
-            <td translatable="yes" context="storage">Capacity</td>
-            <td>{{Size}}</td>
-          </tr>
-          <tr>
-            <td translatable="yes" context="storage">RAID Level</td>
-            <td>{{Level}}</td>
-          </tr>
-          {{#Bitmap}}
-          <tr>
-            <td translatable="yes" context="storage">Bitmap</td>
-            <td>
-              <div class="btn-group btn-toggle"
-                   data-action="mdraid_toggle_bitmap" data-arg="{{dbus.path}}">
-                <button translatable="yes" class="btn {{#Value}}btn-primary active{{/Value}} btn-default">On</button>
-                <button translatable="yes" class="btn {{^Value}}btn-primary active{{/Value}} btn-default">Off</button>
-              </div>
-            </td>
-          </tr>
-          {{/Bitmap}}
-          <tr>
-            <td translatable="yes" context="storage">State</td>
-            <td>
-              {{State}}
-            </td>
-          </tr>
-        </table>
-      </div>
-      {{/MDRaid}}
-    </div>
-  </script>
-
-  <script id="vgroup-detail-tmpl" type="x-template/mustache">
-    <div class="panel panel-default">
-      <div class="panel-heading">
-        {{#VGroup}}<span>{{dbus.Name}}</span> {{/VGroup}}<span translatable="yes">Volume Group</span>
-        <span class="pull-right">{{{VGroupButton}}}</span>
-      </div>
-      {{#VGroup}}
-      <div class="panel-body">
-        <table class="info-table-ct">
-          <tr>
-            <td translatable="yes" context="storage">UUID</td>
-            <td>{{dbus.UUID}}</td>
-          </tr>
-          <tr>
-            <td translatable="yes" context="storage">Capacity</td>
-            <td>{{Size}}</td>
-          </tr>
-        </table>
-      </div>
-      {{/VGroup}}
-    </div>
-  </script>
-
   <div id="storage-detail" hidden>
-    <div class="col-md-12">
-      <ol class="breadcrumb">
-        <li><a translatable="yes">Storage</a></li>
-        <li class="active"></li>
-      </ol>
-    </div>
-
-    <div id="detail-header" class="col-md-12">
-    </div>
-    <div id="detail-sidebar" class="col-md-4 col-lg-3 col-md-push-8 col-lg-push-9">
-    </div>
-    <!-- column classes for #detail-body are set via JavaScript -->
-    <div id="detail-body">
-      <div id="detail-content"></div>
-      <div id="detail-jobs"></div>
-      <div class="panel panel-default cockpit-log-panel">
-        <div class="panel-heading" translatable="yes">Storage Log</div>
-        <div class="panel-body" id="storage-detail-log"></div>
-      </div>
-    </div>
   </div>
 
   <!-- DIALOGS -->
@@ -676,33 +114,42 @@
               {{/MDRaidMembers}}
             </table>
             {{/HasMDRaidMembers}}
+            {{#HasVDOs}}
+            <p translate>This device is currently used for VDO devices.</p>
+            <table class="table table-bordered">
+              {{#VDOs}}
+              <tr><td><span class="pull-right">{{Name}}</span>{{VDO}}</td></tr>
+              {{/VDOs}}
+            </table>
+            {{/HasVDOs}}
             {{/Blocking}}
+            {{{Body}}}
             <table class="form-table-ct">
               {{#Fields}}
               <tr>
                 {{#TextInput}}
                 <td class="top">{{Title}}</td>
                 <td>
-                  <input class="form-control" type="text" {{#Value}}value="{{.}}"{{/Value}} data-field={{.}}>
+                  <input class="form-control" {{#disabled}}disabled{{/disabled}} type="text" {{#Value}}value="{{.}}"{{/Value}} data-field="{{.}}">
                 </td>
                 {{/TextInput}}
                 {{#PassInput}}
                 <td class="top">{{Title}}</td>
                 <td>
-                  <input class="form-control" type="password" {{#Value}}value="{{.}}"{{/Value}} data-field={{.}}>
+                  <input class="form-control" type="password" {{#Value}}value="{{.}}"{{/Value}} data-field="{{.}}">
                 </td>
                 {{/PassInput}}
                 {{#SizeInput}}
                 <td class="top">{{Title}} (MiB)</td>
                 <td>
-                  <input class="form-control" type="text" {{#ValueMB}}value="{{.}}"{{/ValueMB}} data-field={{.}}>
+                  <input class="form-control" type="text" {{#ValueMB}}value="{{.}}"{{/ValueMB}} data-field="{{.}}">
                 </td>
                 {{/SizeInput}}
                 {{#SizeSlider}}
                 <td class="top">{{Title}}</td>
                 <td>
                   <div class="dialog-wrapper">
-                    <div class="size-slider" data-field={{.}}>
+                    <div class="size-slider" data-field="{{.}}">
                       <table>
                         <tr>
                           <td>
@@ -736,15 +183,30 @@
                 <td>
                   <div class="checkbox">
                     <label>
-                      <input type="checkbox" data-field={{.}} {{#Value}}checked{{/Value}}>{{Title}}
+                      <input type="checkbox" data-field="{{.}}" {{#Value}}checked{{/Value}}>{{Title}}
                     </label>
                   </div>
                 </td>
                 {{/CheckBox}}
+                {{#CheckBoxText}}
+                <td class="top">{{RowTitle}}</td>
+                <td>
+                  <div class="dialog-checkbox-text" data-field="{{.}}">
+                    <div class="checkbox">
+                      <label>
+                        <input type="checkbox" {{#Checked}}checked{{/Checked}}>
+                        {{Title}}
+                      </label>
+                    </div>
+                    <input class="form-control" type="text" {{^Checked}}hidden{{/Checked}}
+                           {{#Value}}value="{{.}}"{{/Value}}>
+                  </div>
+                </td>
+                {{/CheckBoxText}}
                 {{#SelectOne}}
                 <td class="top">{{Title}}</td>
                 <td>
-                  <div class="btn-group bootstrap-select dropdown form-control" data-field={{.}}>
+                  <div class="btn-group bootstrap-select dropdown form-control" data-field="{{.}}">
                     <button class="btn btn-default dropdown-toggle" type="button"
                             data-toggle="dropdown">
                       <span class="pull-left"></span>
@@ -764,7 +226,7 @@
                 <td class="top">{{Title}}</td>
                 <td>
                   {{#HasOptions}}
-                  <ul class="list-group available-disks-group dialog-list-ct" data-field={{.}}>
+                  <ul class="list-group available-disks-group dialog-list-ct" data-field="{{.}}">
                     {{#Options}}
                     <li class="list-group-item">
                       <div class="checkbox">
@@ -784,9 +246,34 @@
                   {{/HasOptions}}
                 </td>
                 {{/SelectMany}}
+                {{#SelectOneOfMany}}
+                <td class="top">{{Title}}</td>
+                <td>
+                  {{#HasOptions}}
+                  <ul class="list-group available-disks-group dialog-list-ct" data-field={{.}}>
+                    {{#Options}}
+                    <li class="list-group-item">
+                      <div class="radio">
+                        <label><input type="radio" name={{SelectOneOfMany}}
+                                      {{#checked}}checked{{/checked}} value="{{value}}">
+                          {{#Label}}
+                          <span class="pull-right">{{.}}</span>
+                          {{/Label}}
+                          <span>{{Title}}</span>
+                        </label>
+                      </div>
+                    </li>
+                    {{/Options}}
+                  </ul>
+                  {{/HasOptions}}
+                  {{^HasOptions}}
+                  <span class="text-danger">{{EmptyWarning}}</span>
+                  {{/HasOptions}}
+                </td>
+                {{/SelectOneOfMany}}
                 {{#SelectRow}}
                 <td colspan="2">
-                  <table data-field={{.}} class="dialog-select-row-table">
+                  <table data-field="{{.}}" class="dialog-select-row-table">
                     <thead>
                       <tr>
                         {{#Headers}}<th>{{.}}</th>{{/Headers}}
@@ -802,9 +289,22 @@
                   </table>
                 </td>
                 {{/SelectRow}}
+                {{#ComboBox}}
+                <td class="top">{{Title}}</td>
+                <td>
+                  <div data-field="{{.}}" class="combobox-container">
+                    <div class="input-group">
+                      <input autocomplete="false" class="combobox form-control" type="text" {{#disabled}}disabled{{/disabled}} value="{{Value}}" />
+                      <span class="form-control-feedback caret"></span>
+                      <ul class="typeahead typeahead-long dropdown-menu">
+                      </ul>
+                    </div>
+                  </div>
+                </td>
+                {{/ComboBox}}
                 {{#Arrow}}
                 <td colspan="2">
-                  <div data-field={{.}} class="dialog-arrow {{^Value}}collapsed{{/Value}}">
+                  <div data-field="{{.}}" class="dialog-arrow {{^Value}}collapsed{{/Value}}">
                     <span class="fa {{^Value}}fa-angle-right{{/Value}}{{#Value}}fa-angle-down{{/Value}}"></span>
                     <span>{{Title}}</span>
                   </div>
@@ -845,17 +345,26 @@
                 {{/MDRaidMembers}}
               </table>
               {{/HasMDRaidMembers}}
+              {{#HasUnits}}
+              <p translate>The filesystem is in use by system services or login sessions.<br>
+                Proceeding will stop these services and sessions.</p>
+              <table class="table table-bordered">
+                {{#Units}}
+                <tr><td><span class="pull-right">{{Name}}</span>{{Unit}}</td></tr>
+                {{/Units}}
+              </table>
+              {{/HasUnits}}
             </div>
             {{/Teardown}}
             {{#Action}}
             {{#Danger}}<div class="modal-footer-danger">{{.}}</div>{{/Danger}}
             <div class="spinner spinner-sm pull-left" hidden></div>
-            <button class="btn btn-default" translatable="yes" data-dismiss="modal">Cancel</button>
-            <button class="btn {{#Danger}}btn-danger{{/Danger}}{{^Danger}}btn-primary{{/Danger}}"
+            <button class="btn btn-default" translatable="yes" data-action="cancel">Cancel</button>
+            <button class="btn {{#DangerButton}}btn-danger{{/DangerButton}}{{^DangerButton}}btn-primary{{/DangerButton}}"
                     data-action="apply">{{Title}}</button>
             {{/Action}}
             {{^Action}}
-            <button class="btn btn-default" translatable="yes" data-dismiss="modal">Close</button>
+            <button class="btn btn-default" translatable="yes" data-action="cancel">Close</button>
             {{/Action}}
           </div>
         </div>

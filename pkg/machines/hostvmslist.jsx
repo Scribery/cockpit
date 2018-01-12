@@ -25,8 +25,11 @@ import { rephraseUI, logDebug, toGigaBytes, toFixedPrecision, vmId } from "./hel
 import DonutChart from "./c3charts.jsx";
 import { Listing, ListingRow } from "cockpit-components-listing.jsx";
 import VmDisksTab from './vmdiskstab.jsx';
-import GraphicsConsole from './components/graphicsConsole.jsx';
+import VmNetworkTab from './vmnetworktab.jsx';
+import Consoles from './components/consoles.jsx';
 import { deleteDialog } from "./components/deleteDialog.jsx";
+import InfoRecord from './components/infoRecord.jsx';
+import VmLastMessage from './components/vmLastMessage.jsx';
 
 const _ = cockpit.gettext;
 
@@ -104,7 +107,7 @@ const VmActions = ({ vm, config, dispatch, onStart, onReboot, onForceReboot, onS
     }
 
     let deleteAction = null;
-    if (state !== undefined && config.provider.canDelete && config.provider.canDelete(state)) {
+    if (state !== undefined && config.provider.canDelete && config.provider.canDelete(state, vm.id, config.providerState)) {
         deleteAction = (
             <button className="btn btn-danger" id={`${id}-delete`}
                     onClick={ mouseClick(() => deleteDialog(vm, dispatch)) }>
@@ -145,7 +148,7 @@ IconElement.propTypes = {
     state: PropTypes.string.isRequired,
 }
 
-export const StateIcon = ({ state, config, valueId }) => {
+export const StateIcon = ({ state, config, valueId, extra }) => {
     if (state === undefined) {
         return (<div/>);
     }
@@ -168,15 +171,18 @@ export const StateIcon = ({ state, config, valueId }) => {
     if (stateMap[state]) {
         return (
             <span title={stateMap[state].title} data-toggle='tooltip' data-placement='left'>
+                {extra}
                 <span id={valueId}>{rephraseUI('vmStates', state)}</span>
             </span>);
     }
     return (<small>{state}</small>);
-}
+};
 StateIcon.propTypes = {
     state: PropTypes.string.isRequired,
-    config: PropTypes.string.isRequired
-}
+    config: PropTypes.string.isRequired,
+    valueId: PropTypes.string,
+    extra: PropTypes.any,
+};
 
 /**
  * Render group of buttons as a dropdown
@@ -222,45 +228,6 @@ DropdownButtons.propTypes = {
     buttons: PropTypes.array.isRequired
 }
 
-export const VmOverviewTabRecord = ({ id, descr, value }) => {
-    return (<tr>
-        <td className='top'>
-            <label className='control-label'>
-                {descr}
-            </label>
-        </td>
-        <td id={id}>
-            {value}
-        </td>
-    </tr>);
-};
-VmOverviewTabRecord.propTypes = {
-    id: PropTypes.string,
-    descr: PropTypes.string.isRequired,
-    value: PropTypes.string.isRequired
-}
-
-const VmLastMessage = ({ vm }) => {
-    if (!vm.lastMessage) {
-        return (<tr />); // reserve space to keep rendered structure
-    }
-
-    const msgId = `${vmId(vm.name)}-last-message`;
-    const detail = (vm.lastMessageDetail && vm.lastMessageDetail.exception) ? vm.lastMessageDetail.exception: vm.lastMessage;
-
-    return (
-        <div>
-            <span className='pficon-warning-triangle-o' />&nbsp;
-            <span title={detail} data-toggle='tooltip' id={msgId}>
-                {vm.lastMessage}
-            </span>
-        </div>
-    );
-};
-VmLastMessage.propTypes = {
-    vm: PropTypes.object.isRequired
-}
-
 const VmBootOrder = ({ vm }) => {
     let bootOrder = _("No boot device found");
 
@@ -268,13 +235,13 @@ const VmBootOrder = ({ vm }) => {
         bootOrder = vm.bootOrder.devices.map(bootDevice => bootDevice.type).join(); // Example: network,disk,disk
     }
 
-    return (<VmOverviewTabRecord id={`${vmId(vm.name)}-bootorder`} descr={_("Boot Order:")} value={bootOrder}/>);
+    return (<InfoRecord id={`${vmId(vm.name)}-bootorder`} descr={_("Boot Order:")} value={bootOrder}/>);
 };
 VmBootOrder.propTypes = {
     vm: PropTypes.object.isRequired
 };
 
-const VmOverviewTab = ({ vm, config }) => {
+const VmOverviewTab = ({ vm, config, dispatch }) => {
     let providerContent = null;
     if (config.provider.VmOverviewColumn) {
         const ProviderContent = config.provider.VmOverviewColumn;
@@ -282,21 +249,22 @@ const VmOverviewTab = ({ vm, config }) => {
     }
 
     return (<div>
+        <VmLastMessage vm={vm} dispatch={dispatch} />
         <table className='machines-width-max'>
             <tr className='machines-listing-ct-body-detail'>
                 <td className='machines-listing-detail-top-column'>
                     <table className='form-table-ct'>
-                        <VmOverviewTabRecord descr={_("Memory:")}
+                        <InfoRecord descr={_("Memory:")}
                                              value={cockpit.format_bytes((vm.currentMemory ? vm.currentMemory : 0) * 1024)}/>
-                        <VmOverviewTabRecord id={`${vmId(vm.name)}-vcpus`} descr={_("vCPUs:")} value={vm.vcpus}/>
+                        <InfoRecord id={`${vmId(vm.name)}-vcpus`} descr={_("vCPUs:")} value={vm.vcpus}/>
                     </table>
                 </td>
 
                 <td className='machines-listing-detail-top-column'>
                     <table className='form-table-ct'>
-                        <VmOverviewTabRecord id={`${vmId(vm.name)}-emulatedmachine`}
+                        <InfoRecord id={`${vmId(vm.name)}-emulatedmachine`}
                                              descr={_("Emulated Machine:")} value={vm.emulatedMachine}/>
-                        <VmOverviewTabRecord id={`${vmId(vm.name)}-cputype`}
+                        <InfoRecord id={`${vmId(vm.name)}-cputype`}
                                              descr={_("CPU Type:")} value={vm.cpuModel}/>
                     </table>
                 </td>
@@ -304,7 +272,7 @@ const VmOverviewTab = ({ vm, config }) => {
                 <td className='machines-listing-detail-top-column'>
                     <table className='form-table-ct'>
                         <VmBootOrder vm={vm} />
-                        <VmOverviewTabRecord id={`${vmId(vm.name)}-autostart`}
+                        <InfoRecord id={`${vmId(vm.name)}-autostart`}
                                              descr={_("Autostart:")} value={rephraseUI('autostart', vm.autostart)}/>
                     </table>
                 </td>
@@ -312,7 +280,6 @@ const VmOverviewTab = ({ vm, config }) => {
                 {providerContent}
             </tr>
         </table>
-        <VmLastMessage vm={vm} />
     </div>);
 };
 VmOverviewTab.propTypes = {
@@ -372,7 +339,7 @@ class VmUsageTab extends React.Component {
         const chartSize = {
             width, // keep the .usage-donut-caption CSS in sync
             height
-        }
+        };
 
         return (<table>
                 <tr>
@@ -401,20 +368,24 @@ VmUsageTab.propTypes = {
 
 /** One VM in the list (a row)
  */
-const Vm = ({ vm, config, onStart, onShutdown, onForceoff, onReboot, onForceReboot,
+const Vm = ({ vm, config, hostDevices, onStart, onShutdown, onForceoff, onReboot, onForceReboot,
               onUsageStartPolling, onUsageStopPolling, onSendNMI, dispatch }) => {
-    const stateIcon = (<StateIcon state={vm.state} config={config} valueId={`${vmId(vm.name)}-state`} />);
+    const stateAlert = vm.lastMessage && (<span className='pficon-warning-triangle-o machines-status-alert' />);
+    const stateIcon = (<StateIcon state={vm.state} config={config} valueId={`${vmId(vm.name)}-state`} extra={stateAlert} />);
 
     const usageTabName = (<div id={`${vmId(vm.name)}-usage`}>{_("Usage")}</div>);
     const disksTabName = (<div id={`${vmId(vm.name)}-disks`}>{_("Disks")}</div>);
-    const consolesTabName = (<div id={`${vmId(vm.name)}-consoles`}>{_("Console")}</div>);
+    const networkTabName = (<div id={`${vmId(vm.name)}-networks`}>{_("Networks")}</div>);
+    const consolesTabName = (<div id={`${vmId(vm.name)}-consoles`}>{_("Consoles")}</div>);
 
     let tabRenderers = [
-        {name: _("Overview"), renderer: VmOverviewTab, data: {vm: vm, config: config }},
+        {name: _("Overview"), renderer: VmOverviewTab, data: {vm, config, dispatch }},
         {name: usageTabName, renderer: VmUsageTab, data: {vm, onUsageStartPolling, onUsageStopPolling}, presence: 'onlyActive' },
-        {name: disksTabName, renderer: VmDisksTab, data: {vm: vm, provider: config.provider}, presence: 'onlyActive' },
-        {name: consolesTabName, renderer: GraphicsConsole, data: { vm, config, dispatch }}
+        {name: disksTabName, renderer: VmDisksTab, data: {vm, provider: config.provider}, presence: 'onlyActive' },
+        {name: networkTabName, renderer: VmNetworkTab, data: { vm, dispatch, hostDevices }},
+        {name: consolesTabName, renderer: Consoles, data: { vm, config, dispatch }},
     ];
+
     if (config.provider.vmTabRenderers) { // External Provider might extend the subtab list
         tabRenderers = tabRenderers.concat(config.provider.vmTabRenderers.map(
             tabRender => {
@@ -431,14 +402,11 @@ const Vm = ({ vm, config, onStart, onShutdown, onForceoff, onReboot, onForceRebo
     }
 
     const name = (<span id={`${vmId(vm.name)}-row`}>{vm.name}</span>);
-    const rowName = (vm.lastMessage) ?
-        (<div><span className='pficon-warning-triangle-o' />&nbsp;{name}</div>)
-        : name;
 
     return (<ListingRow
         rowId={`${vmId(vm.name)}`}
         columns={[
-            {name: rowName, 'header': true},
+            {name, 'header': true},
             rephraseUI('connections', vm.connectionName),
             stateIcon
             ]}
@@ -449,6 +417,7 @@ const Vm = ({ vm, config, onStart, onShutdown, onForceoff, onReboot, onForceRebo
 Vm.propTypes = {
     vm: PropTypes.object.isRequired,
     config: PropTypes.object.isRequired,
+    hostDevices: PropTypes.object.isRequired,
     onStart: PropTypes.func.isRequired,
     onShutdown: PropTypes.func.isRequired,
     onForceoff: PropTypes.func.isRequired,
@@ -463,36 +432,63 @@ Vm.propTypes = {
 /**
  * List of all VMs defined on this host
  */
-const HostVmsList = ({ vms, config, dispatch }) => {
-    if (vms.length === 0) {
-        return (<div className='container-fluid'>
-            <NoVm />
-        </div>);
+class HostVmsList extends React.Component {
+    constructor(props) {
+        super(props);
+        this.deviceProxyHandler = this.deviceProxyHandler.bind(this);
+        this.client = cockpit.dbus("org.freedesktop.NetworkManager", {});
+        this.deviceProxies = this.client.proxies("org.freedesktop.NetworkManager.Device");
+        this.deviceProxies.addEventListener('changed', this.deviceProxyHandler);
+        this.deviceProxies.addEventListener('removed', this.deviceProxyHandler);
     }
 
-    const sortFunction = (vmA, vmB) => vmA.name.localeCompare(vmB.name);
+    componentWillUnmount() {
+        this.client.close();
+    }
 
-    return (<div className='container-fluid'>
-        <Listing title={_("Virtual Machines")} columnTitles={[_("Name"), _("Connection"), _("State")]}>
-            {vms
-                .sort(sortFunction)
-                .map(vm => {
-                return (
-                    <Vm vm={vm} config={config}
-                        onStart={() => dispatch(startVm(vm))}
-                        onReboot={() => dispatch(rebootVm(vm))}
-                        onForceReboot={() => dispatch(forceRebootVm(vm))}
-                        onShutdown={() => dispatch(shutdownVm(vm))}
-                        onForceoff={() => dispatch(forceVmOff(vm))}
-                        onUsageStartPolling={() => dispatch(usageStartPolling(vm))}
-                        onUsageStopPolling={() => dispatch(usageStopPolling(vm))}
-                        onSendNMI={() => dispatch(sendNMI(vm))}
-                        dispatch={dispatch}
-                    />);
-            })}
-        </Listing>
-    </div>);
-};
+    deviceProxyHandler() {
+        this.forceUpdate();
+    }
+
+    render() {
+        const { vms, config, dispatch, actions } = this.props;
+        if (vms.length === 0) {
+            return (<div className='container-fluid'>
+                <NoVm />
+            </div>);
+        }
+
+        const sortFunction = (vmA, vmB) => vmA.name.localeCompare(vmB.name);
+
+        let allActions = []; // like createVmAction
+        if (actions) {
+            allActions = allActions.concat(actions);
+        }
+
+        return (<div className='container-fluid'>
+            <Listing title={_("Virtual Machines")} columnTitles={[_("Name"), _("Connection"), _("State")]} actions={allActions}>
+                {vms
+                    .sort(sortFunction)
+                    .map(vm => {
+                    return (
+                        <Vm vm={vm} config={config}
+                            hostDevices={this.deviceProxies}
+                            onStart={() => dispatch(startVm(vm))}
+                            onReboot={() => dispatch(rebootVm(vm))}
+                            onForceReboot={() => dispatch(forceRebootVm(vm))}
+                            onShutdown={() => dispatch(shutdownVm(vm))}
+                            onForceoff={() => dispatch(forceVmOff(vm))}
+                            onUsageStartPolling={() => dispatch(usageStartPolling(vm))}
+                            onUsageStopPolling={() => dispatch(usageStopPolling(vm))}
+                            onSendNMI={() => dispatch(sendNMI(vm))}
+                            dispatch={dispatch}
+                        />);
+                })}
+            </Listing>
+        </div>);
+    }
+}
+
 HostVmsList.propTypes = {
     vms: PropTypes.object.isRequired,
     config: PropTypes.object.isRequired,

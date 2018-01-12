@@ -47,10 +47,23 @@ export function createVmFromTemplate ({ templateName, clusterName, vm }) {
     return virt('CREATE_VM_FROM_TEMPLATE', { templateName, clusterName, vm });
 }
 
+export function switchHostToMaintenance ({ hostId }) {
+    return virt('HOST_TO_MAINTENANCE', { hostId });
+}
+
 export function updateHost(host) {
     return {
         type: 'OVIRT_UPDATE_HOST',
         payload: host
+    };
+}
+
+export function removeHost(id) {
+    return {
+        type: 'OVIRT_REMOVE_HOST',
+        payload: {
+            id,
+        }
     };
 }
 
@@ -61,10 +74,28 @@ export function updateVm(vm) {
     };
 }
 
+export function removeVm(id) {
+    return {
+        type: 'OVIRT_REMOVE_VM',
+        payload: {
+            id,
+        }
+    };
+}
+
 export function updateTemplate(template) {
     return {
         type: 'OVIRT_UPDATE_TEMPLATE',
         payload: template
+    };
+}
+
+export function removeTemplate(id) {
+    return {
+        type: 'OVIRT_REMOVE_TEMPLATE',
+        payload: {
+            id,
+        }
     };
 }
 
@@ -75,38 +106,11 @@ export function updateCluster(cluster) {
     };
 }
 
-export function removeUnlistedHosts({allHostIds}) {
+export function removeCluster(id) {
     return {
-        type: 'OVIRT_REMOVE_UNLISTED_HOSTS',
+        type: 'OVIRT_REMOVE_CLUSTER',
         payload: {
-            allHostIds
-        }
-    };
-}
-
-export function removeUnlistedVms({allVmsIds}) {
-    return {
-        type: 'OVIRT_REMOVE_UNLISTED_VMS',
-        payload: {
-            allVmsIds
-        }
-    };
-}
-
-export function removeUnlistedTemplates({allTemplateIds}) {
-    return {
-        type: 'OVIRT_REMOVE_UNLISTED_TEMPLATES',
-        payload: {
-            allTemplateIds
-        }
-    };
-}
-
-export function removeUnlistedClusters({allClusterIds}) {
-    return {
-        type: 'OVIRT_REMOVE_UNLISTED_CLUSTERS',
-        payload: {
-            allClusterIds
+            id,
         }
     };
 }
@@ -132,6 +136,16 @@ export function goToSubpage (target) {
         type: 'OVIRT_GOTO_SUBPAGE',
         payload: {
             target,
+        },
+    };
+}
+
+export function setHostname(hostname) {
+    return {
+        type: 'OVIRT_SET_HOSTNAME',
+        payload: {
+            hostname,
         }
     };
 }
+

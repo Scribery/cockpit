@@ -35,7 +35,7 @@ class NetworkCase(MachineCase):
         failures_allowed = 3
         while True:
             try:
-                print m.execute("nmcli con show")
+                print(m.execute("nmcli con show"))
                 m.execute("""nmcli -f UUID,DEVICE connection show | awk '$2 == "--" { print $1 }' | xargs -r nmcli con del""")
                 break
             except subprocess.CalledProcessError:
@@ -58,7 +58,7 @@ class NetworkCase(MachineCase):
             path = m.execute("grep -li '%s' /sys/class/net/*/address" % mac)
             return path.split("/")[-2]
         iface = wait(getit).strip()
-        print "%s -> %s" % (mac, iface)
+        print("%s -> %s" % (mac, iface))
         return iface
 
     def add_iface(self, mac=None, vlan=0, activate=True):
@@ -71,8 +71,8 @@ class NetworkCase(MachineCase):
         iface = self.get_iface(m, mac)
         wait(lambda: m.execute('nmcli device | grep %s | grep -v unavailable' % iface))
         if activate:
-            m.execute("nmcli con add type ethernet ifname %s" % iface)
-            m.execute("nmcli dev con %s" % iface)
+            m.execute("nmcli con add type ethernet ifname %s con-name %s" % (iface, iface))
+            m.execute("nmcli con up %s ifname %s" % (iface, iface))
         return iface
 
     def wait_for_iface(self, iface, active=True, state=None, prefix="10.111."):
@@ -90,9 +90,9 @@ class NetworkCase(MachineCase):
             self.browser.wait_visible(sel)
             self.browser.wait_in_text(sel, text)
         except:
-            print "Interface %s didn't show up." % iface
-            print self.browser.eval_js("$('#networking-interfaces').html()")
-            print self.machine.execute("grep . /sys/class/net/*/address")
+            print("Interface %s didn't show up." % iface)
+            print(self.browser.eval_js("ph_find('#networking-interfaces').outerHTML"))
+            print(self.machine.execute("grep . /sys/class/net/*/address"))
             raise
 
     def iface_con_id(self, iface):

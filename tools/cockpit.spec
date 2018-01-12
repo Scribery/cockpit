@@ -92,7 +92,7 @@ Requires: %{name}-system = %{version}-%{release}
 Recommends: %{name}-dashboard = %{version}-%{release}
 Recommends: %{name}-networkmanager = %{version}-%{release}
 Recommends: %{name}-storaged = %{version}-%{release}
-Recommends: sscg >= 2.0.4
+Recommends: sscg >= 2.3
 %ifarch x86_64 %{arm} aarch64 ppc64le i686 s390x
 Recommends: %{name}-docker = %{version}-%{release}
 %endif
@@ -136,7 +136,7 @@ fi
 
 %build
 exec 2>&1
-%configure --disable-silent-rules --with-cockpit-user=cockpit-ws --with-branding=auto --with-selinux-config-type=etc_t %{?rhel:--without-storaged-iscsi-sessions} %{!?build_dashboard:--disable-ssh}
+%configure --disable-silent-rules --with-cockpit-user=cockpit-ws --with-selinux-config-type=etc_t %{?rhel:--without-storaged-iscsi-sessions} %{!?build_dashboard:--disable-ssh}
 make -j4 %{?extra_flags} all
 
 %check
@@ -391,25 +391,6 @@ bastion hosts, and a basic dashboard.
 %files dashboard -f dashboard.list
 %{_libexecdir}/cockpit-ssh
 
-%post dashboard
-# HACK: Until policy changes make it downstream
-echo "Applying workaround for broken SELinux policy: https://bugzilla.redhat.com/show_bug.cgi?id=1381331" >&2
-if type semanage >/dev/null 2>&1; then
-    semanage fcontext -a %{_libexecdir}/cockpit-ssh -t cockpit_ws_exec_t || true
-    restorecon %{_libexecdir}/cockpit-ssh || true
-else
-    chcon -t cockpit_ws_exec_t %{_libexecdir}/cockpit-ssh || true
-fi
-%if 0%{?fedora} > 0 && 0%{?fedora} >= 26
-if type semodule >/dev/null 2>&1; then
-    tmp=$(mktemp -d)
-    echo 'module local 1.0; require { type cockpit_ws_exec_t; type cockpit_ws_t; class file execute_no_trans; } allow cockpit_ws_t cockpit_ws_exec_t:file execute_no_trans;' > "$tmp/local.te"
-    checkmodule -M -m -o "$tmp/local.mod" "$tmp/local.te"
-    semodule_package -o "$tmp/local.pp" -m "$tmp/local.mod"
-    semodule -i "$tmp/local.pp"
-    rm -rf "$tmp"
-fi
-%endif
 %endif
 
 # storaged on RHEL 7.4 and Fedora < 27, udisks on newer ones
@@ -425,11 +406,8 @@ Requires: device-mapper-multipath
 %else
 %if 0%{?rhel} == 7
 Requires: udisks2 >= 2.6
-# FIXME: udisks2 modules not yet available on 7.5
-%if "%{os_version_id}" != "7.5"
 Requires: udisks2-lvm2 >= 2.6
 Requires: udisks2-iscsi >= 2.6
-%endif
 Requires: device-mapper-multipath
 %else
 %if 0%{?fedora} >= 27 || 0%{?rhel} >= 8
@@ -445,6 +423,13 @@ Recommends: storaged-iscsi >= 2.1.1
 Recommends: device-mapper-multipath
 %endif
 %endif
+%endif
+%if 0%{?fedora}
+Requires: python3
+Requires: python3-dbus
+%else
+Requires: python
+Requires: python-dbus
 %endif
 BuildArch: noarch
 
@@ -513,7 +498,7 @@ Requires: expect
 Requires: libvirt
 Requires: libvirt-client
 Requires: libvirt-daemon
-%if 0%{?rhel}%{?centos} == 0 || 0%{?rhel} >= 8 || 0%{?centos} >= 8
+%if 0%{?rhel} >= 8 || 0%{?centos} >= 8 || 0%{?fedora} >= 27
 Requires: python2-libvirt
 %else
 Requires: libvirt-python
@@ -553,9 +538,12 @@ The Cockpit Web Service listens on the network, and authenticates users.
 %doc %{_mandir}/man8/pam_ssh_add.8.gz
 %config(noreplace) %{_sysconfdir}/%{name}/ws-certs.d
 %config(noreplace) %{_sysconfdir}/pam.d/cockpit
+%{_datadir}/%{name}/issue/active.issue
+%{_datadir}/%{name}/issue/inactive.issue
 %{_unitdir}/cockpit.service
 %{_unitdir}/cockpit.socket
 %{_prefix}/%{__lib}/firewalld/services/cockpit.xml
+%{_prefix}/%{__lib}/tmpfiles.d/cockpit-tempfiles.conf
 %{_sbindir}/remotectl
 %{_libdir}/security/pam_ssh_add.so
 %{_libexecdir}/cockpit-ws

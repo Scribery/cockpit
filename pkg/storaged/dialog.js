@@ -24,7 +24,9 @@
     var cockpit = require("cockpit");
 
     var mustache = require("mustache");
+    var utils = require("./utils.js");
     require("patterns");
+    require("cockpit-components-file-autocomplete.css");
 
     var _ = cockpit.gettext;
 
@@ -51,11 +53,17 @@
             if (f.SizeSlider && !f.Units)
                 f.Units = cockpit.get_byte_units(f.Value || f.Max);
 
-            // Help SelectMany with counting
-            if (f.SelectMany)
+            // Help SelectMany etc with counting
+            if (f.SelectMany || f.SelectOneOfMany)
                 f.HasOptions = (f.Options.length > 0);
+
+            // Help CheckBoxText with detecting "false"
+            if (f.CheckBoxText)
+                f.Checked = (f.Value !== false);
         });
 
+        if (def.Action && def.Action.Danger)
+            def.Action.DangerButton = true;
 
         function empty(obj) { return !obj || obj.length === 0; }
 
@@ -137,6 +145,7 @@
                     append($("<div class='slider-thumb'>")));
             $(slider).slider();
 
+            parent.data('min', field.Min || 0);
             parent.data('max', field.Max);
             parent.data('round', field.Round);
             parent.find('.slider').replaceWith(slider);
@@ -155,18 +164,23 @@
             var parent = $(this).parents('.size-slider');
             var input = parent.find('.size-text');
             var unit = parent.find('.size-unit');
+            var min = parent.data('min');
             var max = parent.data('max');
             var round = parent.data('round');
 
             value *= max;
-            if (round)
-                value = Math.round(value / round) * round;
-
-            if (value < 0)
-                value = 0;
+            if (round) {
+                if (typeof round == "function")
+                    value = round (value);
+                else
+                    value = Math.round(value / round) * round;
+            }
+            if (value < min)
+                value = min;
             if (value > max)
                 value = max;
 
+            $(this).prop("value", value / max);
             input.val(cockpit.format_number(value / +unit.val()));
             parent.val(value);
             $(parent).trigger("change");
@@ -179,21 +193,28 @@
             var unit = parent.find('.size-unit');
             var unit_val = +unit.val();
             var slider = parent.find('.slider');
+            var min = parent.data('min');
             var max = parent.data('max');
             var value = +input.val() * unit_val;
 
             // As a special case, if the user types something that
-            // looks like the maximum when formatted, always use
-            // exactly the maximum.  Otherwise we have the confusing
-            // possibility that with the exact same string in the text
-            // input, the size is sometimes too large and sometimes
-            // not.
+            // looks like the maximum (or minimum) when formatted,
+            // always use exactly the maximum (or minimum).  Otherwise
+            // we have the confusing possibility that with the exact
+            // same string in the text input, the size is sometimes
+            // too large (or too small) and sometimes not.
 
-            var max_fmt = cockpit.format_number(max / unit_val);
-            var max_parse = +max_fmt * unit_val;
+            function sanitize(val, limit) {
+                var fmt = cockpit.format_number(limit / unit_val);
+                var parse = +fmt * unit_val;
 
-            if (value == max_parse)
-                value = max;
+                if (val == parse)
+                    val = limit;
+                return val;
+            }
+
+            value = sanitize(value, max);
+            value = sanitize(value, min);
 
             slider.prop("value", value / max);
             parent.val(value);
@@ -223,6 +244,11 @@
                 parent.data('max', field.Max);
             }
 
+            if (value.Min !== undefined) {
+                field.Min = value.Min;
+                parent.data('min', field.Min);
+            }
+
             if (value.Round !== undefined) {
                 field.Round = value.Round;
                 parent.data('round', field.Round);
@@ -241,11 +267,88 @@
             }
         });
 
+        // CheckBoxText
+
+        $dialog.on("change", ".dialog-checkbox-text input[type=checkbox]", function (event) {
+            var parent = $(event.target).parents("[data-field]");
+            var input = parent.find("input[type=text]");
+            input.toggle(event.target.checked);
+        });
+
+        /* ComboBoxes
+         */
+
+        $dialog.on("click", ".combobox-container .caret", function(ev) {
+            $(this).parents(".input-group").toggleClass("open");
+        });
+
+        $dialog.on("click", ".combobox-container li a", function(ev) {
+            $(this).parents(".input-group").find("input").val($(this).text()).trigger("change");
+            $(this).parents(".input-group").removeClass("open");
+        });
+
+        function combobox_set_choices(name, choices) {
+            if (typeof choices == 'function') {
+                $.when(choices(get_field_values())).then(function (result) {
+                    if (result !== false)
+                        combobox_set_choices(name, result);
+                });
+                return;
+            }
+
+            var $f = $dialog.find('[data-field="' + name + '"]');
+            var $ul = $f.find('ul');
+            $ul.empty().append(choices.map(function (c) {
+                return $('<li>').append($('<a>').text(c));
+            }));
+            $f.find(".caret").toggle(choices.length > 0);
+        }
+
+        var combobox_some_dynamic = false;
+
+        $dialog.find(".combobox-container .caret").hide();
+        def.Fields.forEach(function (f) {
+            if (f.ComboBox) {
+                if (typeof f.Choices == 'function')
+                    combobox_some_dynamic = true;
+                combobox_set_choices(f.ComboBox, f.Choices);
+            }
+        });
+
+        var combobox_timeout;
+
+        function combobox_reset_dynamic_choices() {
+            if (!combobox_some_dynamic)
+                return;
+
+            if (combobox_timeout)
+                window.clearTimeout(combobox_timeout);
+            combobox_timeout = window.setTimeout(function () {
+                def.Fields.forEach(function (f) {
+                    if (f.ComboBox && typeof f.Choices == 'function') {
+                        combobox_set_choices(f.ComboBox, f.Choices);
+                    }
+                });
+            }, 500);
+        }
+
+        /* Radio buttons
+         */
+
+        $dialog.on("change", ".available-disks-group .radio input", function(ev) {
+            var parent = $(this).parents('.available-disks-group');
+            parent.trigger("change");
+        });
+
+        /* Main
+         */
+
         var invisible = { };
 
         function get_name(f) {
             return (f.TextInput || f.PassInput || f.SelectOne || f.SelectMany || f.SizeInput ||
-                    f.SizeSlider || f.CheckBox || f.Arrow || f.SelectRow);
+                    f.SizeSlider || f.CheckBox || f.Arrow || f.SelectRow || f.CheckBoxText ||
+                    f.ComboBox || f.SelectOneOfMany);
         }
 
         function get_field_values() {
@@ -272,13 +375,28 @@
                         if (e.checked)
                             vals[n].push(f.Options[i].value);
                     });
+                } else if (f.SelectOneOfMany) {
+                    vals[n] = undefined;
+                    $f.find('input').each(function (i, e) {
+                        if (e.checked)
+                            vals[n] = f.Options[i].value;
+                    });
                 } else if (f.SelectRow) {
                     $f.find('tbody tr').each(function (i, e) {
                         if ($(e).hasClass('highlight-ct'))
                             vals[n] = f.Rows[i].value;
                     });
+                } else if (f.ComboBox) {
+                    vals[n] = $f.find('input[type=text]').val();
                 } else if (f.Arrow) {
                     vals[n] = !$f.hasClass('collapsed');
+                } else if (f.CheckBoxText) {
+                    var box = $f.find("input[type=checkbox]");
+                    var input = $f.find("input[type=text]");
+                    if (!box.prop('checked'))
+                        vals[n] = false;
+                    else
+                        vals[n] = input.val();
                 }
             });
 
@@ -322,6 +440,8 @@
                     msg = _("Size cannot be negative");
                 if (!field.AllowInfinite && val > field.Max)
                     msg = _("Size is too large");
+                if (field.Min !== undefined && val < field.Min)
+                    msg = cockpit.format(_("Size must be at least $0"), utils.fmt_size(field.Min));
             }
 
             if (field.validate)
@@ -354,6 +474,7 @@
 
         $dialog.on('change input', function (event) {
             update_visibility();
+            combobox_reset_dynamic_choices();
             var trigger = $(event.target).attr("data-field");
             if (trigger)
                 update_fields(trigger);
@@ -368,6 +489,16 @@
                 return err;
         }
 
+        function close() {
+            if (combobox_timeout)
+                window.clearTimeout(combobox_timeout);
+            $dialog.modal('hide');
+        }
+
+        $dialog.find('button[data-action="cancel"]').on('click', function () {
+            close();
+        });
+
         $dialog.find('button[data-action="apply"]').on('click', function () {
             var vals = get_validated_field_values();
             if (vals !== null) {
@@ -376,7 +507,7 @@
                     $dialog.dialog('wait', promise);
                     promise
                         .done(function (result) {
-                            $dialog.modal('hide');
+                            close();
                         })
                         .fail(function (err) {
                             if (def.Action.failure_filter)
@@ -390,7 +521,7 @@
                             }
                         });
                 } else {
-                    $dialog.modal('hide');
+                    close();
                 }
             }
         });

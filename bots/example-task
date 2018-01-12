@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 # This file is part of Cockpit.
@@ -41,6 +41,9 @@ def run(argument, verbose=False, **kwargs):
         return "Failed to parse argument"
 
     sys.stdout.write("Example message to log\n")
+
+    # Attach the package.json script as an example
+    task.attach("./package.json")
     time.sleep(20)
 
 if __name__ == '__main__':

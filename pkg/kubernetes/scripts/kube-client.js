@@ -64,7 +64,7 @@
         { kind: "User", type: "users", api: OPENSHIFT, global: true },
     ]);
 
-    var NAME_RE = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
+    var NAME_RE = /^[a-z0-9]([-a-z0-9_.]*[a-z0-9])?$/;
     var USER_NAME_RE = /^[a-zA-Z0-9_.]([-a-zA-Z0-9 ,=@._]*[a-zA-Z0-9._])?$/;
 
     /* Timeout for non-GET requests */
@@ -654,7 +654,7 @@
             function connectUntil(ret, until) {
                 if (until) {
                     if (until.$on) {
-                        until.$on("destroy", function() {
+                        until.$on("$destroy", function() {
                             ret.cancel();
                         });
                     } else {

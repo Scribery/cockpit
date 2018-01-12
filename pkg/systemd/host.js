@@ -431,7 +431,8 @@ PageServer.prototype = {
                                                 '/org/projectatomic/rpmostree1/Sysroot');
         $(self.sysroot).on("changed", $.proxy(this, "sysroot_changed"));
 
-        self.client = cockpit.dbus('org.freedesktop.hostname1');
+        self.client = cockpit.dbus('org.freedesktop.hostname1',
+                                   {"superuser" : "try"});
         self.hostname_proxy = self.client.proxy('org.freedesktop.hostname1',
                                      '/org/freedesktop/hostname1');
         self.kernel_hostname = null;
@@ -468,7 +469,7 @@ PageServer.prototype = {
         $.extend(memory_options.yaxis, { ticks: plot.memory_ticks,
                                          tickFormatter: plot.format_bytes_tick_no_unit
                                        });
-        memory_options.setup_hook = function memory_setup_hook(pl) {
+        memory_options.post_hook = function memory_post_hook(pl) {
             var axes = pl.getAxes();
             $('#server_memory_unit').text(plot.bytes_tick_unit(axes.yaxis));
         };
@@ -497,7 +498,9 @@ PageServer.prototype = {
             else
                 axes.yaxis.options.max = null;
             axes.yaxis.options.min = 0;
-
+        };
+        network_options.post_hook = function network_post_hook(pl) {
+            var axes = pl.getAxes();
             $('#server_network_traffic_unit').text(plot.bits_per_sec_tick_unit(axes.yaxis));
         };
 
@@ -525,7 +528,9 @@ PageServer.prototype = {
             else
                 axes.yaxis.options.max = null;
             axes.yaxis.options.min = 0;
-
+        };
+        disk_options.post_hook = function disk_post_hook(pl) {
+            var axes = pl.getAxes();
             $('#server_disk_io_unit').text(plot.bytes_per_sec_tick_unit(axes.yaxis));
         };
 

@@ -29,7 +29,7 @@ Build-Depends: debhelper (>= 9.20141010),
                glib-networking,
                openssh-client <!nocheck>,
                python,
-Standards-Version: 4.1.0
+Standards-Version: 4.1.1
 Homepage: http://cockpit-project.org/
 Vcs-Git: git://anonscm.debian.org/collab-maint/cockpit.git
 Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/cockpit.git
@@ -95,16 +95,10 @@ Description: Cockpit user interface for Docker containers
 Package: cockpit-machines
 Architecture: all
 Depends: ${misc:Depends},
-         libvirt-daemon-system
+         libvirt-daemon-system,
+         libosinfo-bin
 Description: Cockpit user interface for virtual machines
  The Cockpit components for managing virtual machines.
-
-Package: cockpit-ovirt
-Architecture: all
-Depends: ${misc:Depends},
-         libvirt-daemon-system
-Description: Cockpit user interface for oVirt virtual machines
- The Cockpit components for managing virtual machines running on an oVirt host..
 
 Package: cockpit-networkmanager
 Architecture: all
@@ -137,6 +131,8 @@ Depends: ${misc:Depends},
          udisks2,
          udisks2 (<< 2.7) | libblockdev-mdraid2,
          cockpit-bridge (>= ${bridge:minversion}),
+         python3,
+         python3-dbus
 Description: Cockpit user interface for storage
  The Cockpit components for interacting with storage.
 

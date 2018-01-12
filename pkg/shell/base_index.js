@@ -17,8 +17,6 @@
  * along with Cockpit; If not, see <http://www.gnu.org/licenses/>.
  */
 
-var phantom_checkpoint = phantom_checkpoint || function () { };
-
 (function() {
     "use strict";
 
@@ -339,7 +337,6 @@ var phantom_checkpoint = phantom_checkpoint || function () { };
             frame.setAttribute('data-loaded', '1');
 
             perform_track(child);
-            phantom_checkpoint();
 
             index.navigate();
             return source;
@@ -509,20 +506,16 @@ var phantom_checkpoint = phantom_checkpoint || function () { };
             if (!a.host || window.location.host === a.host) {
                 self.jump(a.getAttribute('href'));
                 ev.preventDefault();
-                phantom_checkpoint();
             }
         });
 
-        if (window.navigator.userAgent.indexOf("PhantomJS") == -1) {
-            var old_onerror = window.onerror;
-            window.onerror = function cockpit_error_handler(msg, url, line) {
-                self.show_oops();
-                phantom_checkpoint();
-                if (old_onerror)
-                    return old_onerror(msg, url, line);
-                return false;
-            };
-        }
+        var old_onerror = window.onerror;
+        window.onerror = function cockpit_error_handler(msg, url, line) {
+            self.show_oops();
+            if (old_onerror)
+                return old_onerror(msg, url, line);
+            return false;
+        };
 
         /*
          * Navigation is driven by state objects, which are used with pushState()
@@ -584,41 +577,44 @@ var phantom_checkpoint = phantom_checkpoint || function () { };
         }
 
         function build_navbar() {
-            var navbar = $("#content-navbar");
+            var navbar = $("#main-navbar");
+            navbar.on("click", function () {
+                navbar.parent().toggleClass("clicked", true);
+            });
+
+            navbar.on("mouseout", function () {
+                navbar.parent().toggleClass("clicked", false);
+            });
 
             function links(component) {
+                var sm = $("<span class='fa'>")
+                    .attr("data-toggle", "tooltip")
+                    .attr("title", "")
+                    .attr("data-original-title", component.label);
+
+                if (component.icon)
+                    sm.addClass(component.icon);
+                else
+                    sm.addClass("first-letter").text(component.label);
+
+                var value = $("<span class='list-group-item-value'>")
+                    .text(component.label);
+
                 var a = $("<a>")
                     .attr("href", self.href({ host: "localhost", component: component.path }))
-                    .text(component.label);
-                return $("<li class='dashboard-link'>")
+                    .attr("title", component.label)
+                    .append(sm)
+                    .append(value);
+
+                return $("<li class='dashboard-link list-group-item'>")
                     .attr("data-component", component.path)
                     .append(a);
             }
 
-            if (shell_embedded) {
-                navbar.hide();
-            } else {
-                var local_compiled = new CompiledComponents();
-                local_compiled.load(cockpit.manifests, "dashboard");
-                navbar.append(local_compiled.ordered("dashboard").map(links));
-            }
+            var local_compiled = new CompiledComponents();
+            local_compiled.load(cockpit.manifests, "dashboard");
+            navbar.append(local_compiled.ordered("dashboard").map(links));
         }
-
-        self.recalculate_layout = function() {
-            var topnav = $('#topnav');
-            var sidebar = $('#sidebar');
-            var content = $('#content');
-
-            var window_height = $(window).height();
-            var topnav_height = topnav.height();
-
-            var y = window_height - topnav_height;
-            $(current_frame).height(Math.floor(y));
-            sidebar.height(y);
-
-            var sidebar_width = sidebar.is(':visible') ? sidebar.outerWidth() : 0;
-            content.css("margin-left", sidebar_width + "px");
-        };
 
         self.retrieve_state = function() {
             var state = window.history.state;
@@ -727,10 +723,6 @@ var phantom_checkpoint = phantom_checkpoint || function () { };
                 self.navigate(ev.state, true);
             });
 
-            $(window).on('resize', function () {
-                self.recalculate_layout();
-            });
-
             build_navbar();
             self.navigate();
             cockpit.translate();
@@ -755,8 +747,43 @@ var phantom_checkpoint = phantom_checkpoint || function () { };
             });
         }
 
+        function css_content(elt) {
+            var styles, i;
+            var style, content;
+            var el_style, el_content;
+
+            if (elt)
+                style = window.getComputedStyle(elt, ":before");
+            if (!style)
+                return;
+
+            content = style.content;
+            // Old branding had style on the element itself
+            if (!content) {
+                el_style = window.getComputedStyle(elt);
+                if (el_style)
+                    el_content = el_style.content;
+            }
+
+            // getComputedStyle is broken for pseudo elements
+            // in Phantomjs and some old browsers
+            // those support the depricated getMatchedCSSRules
+            if (!content && style.length === 0 && window.getMatchedCSSRules) {
+                styles = window.getMatchedCSSRules(elt, ":before") || [];
+                for (i = 0; i < styles.length; i++) {
+                    if (styles[i].style.content) {
+                        content = styles[i].style.content;
+                        break;
+                    }
+                }
+            }
+
+            return content || el_content;
+        }
+
         /* Branding */
         function setup_brand(id, default_title) {
+            var elt = $(id)[0];
             var os_release = {};
             try {
                 os_release = JSON.parse(window.localStorage['os-release'] || "{}");
@@ -764,13 +791,7 @@ var phantom_checkpoint = phantom_checkpoint || function () { };
                 console.warn("Couldn't parse os-release", ex);
             }
 
-            var style, elt = $(id)[0];
-            if (elt)
-                style = window.getComputedStyle(elt);
-            if (!style)
-                return;
-
-            var len, content = style.content;
+            var len, content = css_content(elt);
             if (content && content != "none" && content != "normal") {
                 len = content.length;
                 if ((content[0] === '"' || content[0] === '\'') &&
@@ -778,6 +799,8 @@ var phantom_checkpoint = phantom_checkpoint || function () { };
                     content = content.substr(1, len - 2);
                 elt.innerHTML = cockpit.format(content, os_release) || default_title;
                 return $(elt).text();
+            } else {
+                elt.removeAttribute("class");
             }
         }
 
@@ -819,7 +842,6 @@ var phantom_checkpoint = phantom_checkpoint || function () { };
 
             $(id).on("shown.bs.modal", function() {
                 $("display-language-list").focus();
-                phantom_checkpoint();
             });
         }
 
@@ -827,7 +849,6 @@ var phantom_checkpoint = phantom_checkpoint || function () { };
         function setup_about(id) {
             $(cockpit.info).on("changed", function() {
                 $(id).text(cockpit.info.version);
-                phantom_checkpoint();
             });
         }
 
@@ -862,7 +883,7 @@ var phantom_checkpoint = phantom_checkpoint || function () { };
         var cal_title;
         if (self.brand_sel) {
             cal_title = setup_brand(self.brand_sel, self.default_title);
-            if (cal_title)
+            if (cal_title && !self.skip_brand_title)
                 self.default_title = cal_title;
         }
 
@@ -892,6 +913,7 @@ var phantom_checkpoint = phantom_checkpoint || function () { };
                         section: section,
                         label: cockpit.gettext(info.label) || prop,
                         order: info.order === undefined ? 1000 : info.order,
+                        icon: info.icon,
                         wants: info.wants
                     };
                     if (info.path)

@@ -16,14 +16,11 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with Cockpit; If not, see <http://www.gnu.org/licenses/>.
 
-import argparse
-import os
 import sys
 import glob
 import imp
 import os
 import string
-import subprocess
 import unittest
 
 sys.dont_write_bytecode = True
@@ -33,7 +30,6 @@ testdir = os.path.abspath(os.path.join(base_dir, ".."))
 sys.path.append(testdir)
 
 from common import testlib
-from common import testvm
 
 def check_valid(filename):
     name = os.path.basename(filename)
@@ -59,6 +55,12 @@ def run(opts):
     return testlib.test_main(options=opts, suite=suite)
 
 def main():
+    # HACK: Full chromium under Xvfb is very brittle; disable default parallelism
+    try:
+        del os.environ["TEST_JOBS"]
+    except KeyError:
+        pass
+
     parser = testlib.arg_parser()
     parser.add_argument('-c', '--container', dest="container", action='store',
                         help='container to test')

@@ -20,9 +20,12 @@
 
 import os
 import subprocess
+import sys
 import unittest
 
-BOTS = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+BASE = os.path.dirname(__file__)
+BOTS = os.path.normpath(os.path.join(BASE, ".."))
+sys.path.insert(1, BOTS)
 
 PCP_CRASH = """
 # ----------------------------------------------------------------------
@@ -68,60 +71,27 @@ Journal extracted to TestMultiMachine-testFrameNavigation-fedora-i386-127.0.0.2-
 Journal extracted to TestMultiMachine-testFrameNavigation-fedora-i386-127.0.0.2-2502-FAIL.log
 """
 
-PHANTOMJS_CRASH = """
-# ----------------------------------------------------------------------
-# testFrameNavigation (check_multi_machine.TestMultiMachine)
-#
-Resource Error: Operation canceled http://127.0.0.2:9391/cockpit/@10.111.113.2/playground/test.html#/
-Resource Error: Operation canceled http://127.0.0.2:9391/cockpit/@10.111.113.2/playground/test.html#/
-not ok 110 testFrameNavigation (check_multi_machine.TestMultiMachine)
-Traceback (most recent call last):
-  File "test/verify/check-multi-machine", line 202, in tearDown
-    MachineCase.tearDown(self)
-Error: blah
-"""
-
-PHANTOMJS_RETRY = """
-# ----------------------------------------------------------------------
-# testFrameNavigation (check_multi_machine.TestMultiMachine)
-#
-Resource Error: Operation canceled http://127.0.0.2:9391/cockpit/@10.111.113.2/playground/test.html#/
-Resource Error: Operation canceled http://127.0.0.2:9391/cockpit/@10.111.113.2/playground/test.html#/
-# RETRY due to failure of test harness or framework
-Traceback (most recent call last):
-  File "test/verify/check-multi-machine", line 202, in tearDown
-    MachineCase.tearDown(self)
-Error: blah
-"""
-
 class TestPolicy(unittest.TestCase):
     def testNaughtyNumber(self):
         script = os.path.join(BOTS, "image-naughty")
         cmd = [ script, "--offline", "verify/example" ]
-        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
         (output, unused) = proc.communicate(PCP_CRASH)
         self.assertEqual(output, "9876\n")
 
     def testSimpleNumber(self):
         script = os.path.join(BOTS, "tests-policy")
         cmd = [ script, "--simple", "--offline", "verify/example" ]
-        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
         (output, unused) = proc.communicate(PCP_CRASH)
         self.assertEqual(output, "9876\n")
 
     def testKnownIssue(self):
         script = os.path.join(BOTS, "tests-policy")
         cmd = [ script, "--offline", "verify/example" ]
-        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, universal_newlines=True)
         (output, unused) = proc.communicate(PCP_CRASH)
         self.assertEqual(output, PCP_KNOWN)
-
-    def testRetryIssue(self):
-        script = os.path.join(BOTS, "tests-policy")
-        cmd = [ script, "--offline", "verify/example" ]
-        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        (output, unused) = proc.communicate(PHANTOMJS_CRASH)
-        self.assertEqual(output, PHANTOMJS_RETRY)
 
 
 if __name__ == '__main__':

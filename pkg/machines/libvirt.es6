@@ -84,7 +84,16 @@ function getValueFromLine(parsedLines, pattern) {
  */
 export function buildFailHandler({ dispatch, name, connectionName, message, extraPayload }) {
     return ({ exception, data }) =>
-        dispatch(vmActionFailed({name, connectionName, message, detail: {exception, data}}, extraPayload));
+        dispatch(vmActionFailed({
+            name,
+            connectionName,
+            message,
+            detail: {
+                exception,
+                data,
+            },
+            extraPayload,
+        }));
 }
 
 let LIBVIRT_PROVIDER = {};
@@ -106,11 +115,13 @@ LIBVIRT_PROVIDER = {
 
     canReset: (vmState) => vmState == 'running' || vmState == 'idle' || vmState == 'paused',
     canShutdown: (vmState) => LIBVIRT_PROVIDER.canReset(vmState),
-    canDelete: (vmState) => true,
+    canDelete: (vmState, vmId, providerState) => true,
     isRunning: (vmState) => LIBVIRT_PROVIDER.canReset(vmState),
     canRun: (vmState) => vmState == 'shut off',
     canConsole: (vmState) => vmState == 'running',
     canSendNMI: (vmState) => LIBVIRT_PROVIDER.canReset(vmState),
+
+    serialConsoleCommand: ({ vm }) => !!vm.displays['pty'] ? [ 'virsh', ...VMS_CONFIG.Virsh.connections[vm.connectionName].params, 'console', vm.name ] : false,
 
     /**
      * Read VM properties of a single VM (virsh)
@@ -237,6 +248,19 @@ LIBVIRT_PROVIDER = {
         };
     },
 
+    CHANGE_NETWORK_STATE ({ name, networkMac, state, connectionName }) {
+        logDebug(`${this.name}.CHANGE_NETWORK_STATE(${name}.${networkMac} ${state}):`);
+        return dispatch => {
+            spawnVirsh({connectionName,
+                method: 'CHANGE_NETWORK_STATE',
+                failHandler: buildFailHandler({ dispatch, name, connectionName, message: _("CHANGE NETWORK STATE action failed")}),
+                args: ['domif-setlink', name, networkMac, state]
+            }).then(() => {
+                dispatch(getVm(connectionName, name));
+            });
+        };
+    },
+
     USAGE_START_POLLING ({ name, connectionName }) {
         logDebug(`${this.name}.USAGE_START_POLLING(${name}):`);
         return (dispatch => {
@@ -353,6 +377,7 @@ function parseDumpxml(dispatch, connectionName, domXml) {
     const bootOrder = parseDumpxmlForBootOrder(osElem, devicesElem);
     const cpuModel = parseDumpxmlForCpuModel(cpuElem);
     const displays = parseDumpxmlForConsoles(devicesElem);
+    const interfaces = parseDumpxmlForInterfaces(devicesElem);
 
     dispatch(updateOrAddVm({
         connectionName, name, id,
@@ -364,6 +389,7 @@ function parseDumpxml(dispatch, connectionName, domXml) {
         cpuModel,
         bootOrder,
         displays,
+        interfaces,
     }));
 }
 
@@ -426,6 +452,61 @@ function parseDumpxmlForDisks(devicesElem) {
     }
 
     return disks;
+}
+
+function parseDumpxmlForInterfaces(devicesElem) {
+    const interfaces = [];
+    const interfaceElems = devicesElem.getElementsByTagName('interface');
+    if (interfaceElems) {
+        for (let i = 0; i < interfaceElems.length; i++) {
+            const interfaceElem = interfaceElems[i];
+
+            const targetElem = interfaceElem.getElementsByTagName('target')[0];
+            const macElem = getSingleOptionalElem(interfaceElem, 'mac');
+            const modelElem = getSingleOptionalElem(interfaceElem, 'model');
+            const aliasElem = getSingleOptionalElem(interfaceElem, 'alias');
+            const sourceElem = getSingleOptionalElem(interfaceElem, 'source');
+            const driverElem = getSingleOptionalElem(interfaceElem, 'driver');
+            const virtualportElem = getSingleOptionalElem(interfaceElem, 'virtualport');
+            const addressElem = getSingleOptionalElem(interfaceElem, 'address');
+            const linkElem = getSingleOptionalElem(interfaceElem, 'link');
+            const mtuElem = getSingleOptionalElem(interfaceElem, 'mtu');
+            const localElem = addressElem ? getSingleOptionalElem(addressElem, 'local') : null;
+
+            const networkInterface = { // see https://libvirt.org/formatdomain.html#elementsNICS
+                type: interfaceElem.getAttribute('type'), //Only one required parameter
+                managed: interfaceElem.getAttribute('managed'),
+                name: interfaceElem.getAttribute('name') ? interfaceElem.getAttribute('name') : undefined, //Name of interface
+                target: targetElem ? targetElem.getAttribute('dev') : undefined,
+                mac: macElem.getAttribute('address'), //MAC address
+                model: modelElem.getAttribute('type'), //Device model
+                aliasName: aliasElem ? aliasElem.getAttribute('name') : undefined,
+                virtualportType: virtualportElem ? virtualportElem.getAttribute('type') : undefined,
+                driverName: driverElem ? driverElem.getAttribute('name') : undefined,
+                state: linkElem ? linkElem.getAttribute('state') : 'up', //State of interface, up/down (plug/unplug)
+                mtu: mtuElem ? mtuElem.getAttribute('size') : undefined,
+                source: {
+                    bridge: sourceElem ? sourceElem.getAttribute('bridge') : undefined,
+                    network: sourceElem ? sourceElem.getAttribute('network') : undefined,
+                    portgroup: sourceElem ? sourceElem.getAttribute('portgroup') : undefined,
+                    dev: sourceElem ? sourceElem.getAttribute('dev') : undefined,
+                    mode: sourceElem ? sourceElem.getAttribute('mode') : undefined,
+                    address: sourceElem ? sourceElem.getAttribute('address') : undefined,
+                    port: sourceElem ? sourceElem.getAttribute('port') : undefined,
+                    local: {
+                        address: localElem ? localElem.getAttribute('address') : undefined,
+                        port: localElem ? localElem.getAttribute('port') : undefined,
+                    },
+                },
+                address: {
+                    bus: addressElem ? addressElem.getAttribute('bus') : undefined,
+                    function: addressElem ? addressElem.getAttribute('function') : undefined,
+                },
+            };
+            interfaces.push(networkInterface);
+        }
+    }
+    return interfaces;
 }
 
 function getBootableDeviceType(device) {
@@ -523,6 +604,20 @@ function parseDumpxmlForConsoles(devicesElem) {
             } else {
                 console.warn(`parseDumpxmlForConsoles(): mandatory properties are missing in dumpxml, found: ${JSON.stringify(display)}`);
             }
+        }
+    }
+
+    // console type='pty'
+    const consoleElems = devicesElem.getElementsByTagName("console");
+    if (consoleElems) {
+        for (let i = 0; i < consoleElems.length; i++) {
+            const consoleElem = consoleElems[i];
+            if (consoleElem.getAttribute('type') === 'pty') {
+                // Definition of serial console is detected.
+                // So far no additional details needs to be parsed since the console is accessed via 'virsh console'.
+                displays['pty'] = {};
+            }
+
         }
     }
 

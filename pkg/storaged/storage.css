@@ -39,7 +39,7 @@
     text-overflow: ellipsis;
 }
 
-@media (min-width: 992px) {
+@media (max-width: 1200px) {
     .storage-mounts .mount-name {
         width: 25%;
     }
@@ -51,6 +51,9 @@
     }
     .storage-mounts .mount-size-number {
         width: 25%;
+    }
+    .storage-mounts .mount-actions {
+        width: 50%;
     }
 }
 
@@ -67,6 +70,13 @@
     .storage-mounts .mount-size-number {
         width: 15%;
     }
+    .storage-mounts .mount-actions {
+        width: 60%;
+    }
+}
+
+#nfs-mounts tr {
+    height: 43px;
 }
 
 @media (max-width: 1814px) {
@@ -133,7 +143,8 @@
     margin-bottom: 0px;
 }
 
-.available-disks-group input[type='checkbox'] {
+.available-disks-group input[type='checkbox'],
+.available-disks-group input[type='radio'] {
     margin: 4px 4px 4px -20px;
 }
 
@@ -147,11 +158,13 @@
     padding: 3px 10px;
 }
 
-.available-disks-group .checkbox label {
+.available-disks-group .checkbox label,
+.available-disks-group .radio label {
     width: 100%;
 }
 
-.available-disks-group .checkbox label span {
+.available-disks-group .checkbox label span,
+.available-disks-group .radio label span {
     display: block;
     margin-left: 20px;
     margin-top: 6px;
@@ -162,16 +175,17 @@
     max-width: 450px;
 }
 
-.available-disks-group .checkbox label input[type="checkbox"] {
+.available-disks-group .checkbox label input[type="checkbox"],
+.available-disks-group .radio label input[type="radio"] {
     margin-left: auto;
     margin-top: 8px;
 }
 
 @media (min-width: 768px) {
-    .storage-reading-graph-container {
+    .storage-graph-container:nth-child(1) {
         padding-right: 5px;
     }
-    .storage-writing-graph-container {
+    .storage-graph-container:nth-child(2) {
         padding-left: 5px;
     }
 }
@@ -226,7 +240,8 @@
     padding-right: 0.75em;
 }
 
-.form-table-ct .checkbox {
+.form-table-ct .checkbox,
+.form-table-ct .radio {
     margin-top: 0px;
     margin-bottom: 0px;
 }
@@ -330,7 +345,6 @@ td.storage-icon {
 }
 
 td.storage-icon .spinner {
-    visibility: hidden;
     margin-top: 5px;
 }
 
@@ -360,7 +374,7 @@ td.job-action {
     text-align: right;
 }
 
-#detail-jobs .panel {
+.detail-jobs {
     margin-top: 20px;
 }
 
@@ -368,15 +382,15 @@ td.job-action {
     display: inline-block;
 }
 
-#storage-graph-toolbar button span {
+#storage-graph-toolbar .dropdown button span {
     width: 6em;
     text-align: left;
     padding-left: 5px;
     display: inline-block;
 }
 
-#storage-reading-graph,
-#storage-writing-graph {
+.storage-graph
+{
     height: 120px;
 }
 
@@ -455,6 +469,21 @@ td.vgroup-action {
 
 .dialog-arrow .fa {
     width: 1em;
+}
+
+.dialog-checkbox-text {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+}
+
+.dialog-checkbox-text :nth-child(2) {
+    flex: 1;
+    margin-left: 0.5em;
+}
+
+.form-control[hidden] {
+    display: none;
 }
 
 .modal-footer-danger {
@@ -550,6 +579,20 @@ td.storage-action {
     overflow: visible !important;
 }
 
+.nfs-users-table {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.nfs-users-table table {
+    width: 100%;
+}
+
+.nfs-users-table td:nth-child(2) {
+    padding-left: 0.75em;
+    width: 80%;
+}
+
 /* Layout fix for tooltip arrows.
  *
  * Sometimes when there are non-integer coordinates involved
@@ -566,4 +609,8 @@ td.storage-action {
 
 .tooltip.bottom .tooltip-arrow {
     top: 1px;
+}
+
+.form-table-ct .combobox-container .input-group {
+    width: 100%;
 }

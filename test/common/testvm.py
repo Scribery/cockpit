@@ -32,7 +32,7 @@ import tempfile
 import sys
 import time
 
-DEFAULT_IMAGE = os.environ.get("TEST_OS", "fedora-26")
+DEFAULT_IMAGE = os.environ.get("TEST_OS", "fedora-27")
 
 MEMORY_MB = 1024
 
@@ -68,9 +68,15 @@ class Timeout:
         Specify machine to ensure that a machine's ssh operations are canceled when the timer expires.
     """
     def __init__(self, seconds=1, error_message='Timeout', machine=None):
+        if signal.getsignal(signal.SIGALRM) != signal.SIG_DFL:
+            # there is already a different Timeout active
+            self.seconds = None
+            return
+
         self.seconds = seconds
         self.error_message = error_message
         self.machine = machine
+
     def handle_timeout(self, signum, frame):
         if self.machine:
             if self.machine.ssh_process:
@@ -78,11 +84,15 @@ class Timeout:
             self.machine.disconnect()
 
         raise RuntimeError(self.error_message)
+
     def __enter__(self):
-        signal.signal(signal.SIGALRM, self.handle_timeout)
-        signal.alarm(self.seconds)
+        if self.seconds:
+            signal.signal(signal.SIGALRM, self.handle_timeout)
+            signal.alarm(self.seconds)
+
     def __exit__(self, type, value, traceback):
-        signal.alarm(0)
+        if self.seconds:
+            signal.alarm(0)
 
 class Failure(Exception):
     def __init__(self, msg):
@@ -169,7 +179,7 @@ class Machine:
         """Prints args if in verbose mode"""
         if not self.verbose:
             return
-        print " ".join(args)
+        print(" ".join(args))
 
     def start(self):
         """Overridden by machine classes to start the machine"""
@@ -300,10 +310,10 @@ class Machine:
                 for fd in ret[0]:
                     if fd == stdout_fd:
                         data = os.read(fd, 1024)
-                        if data == "":
+                        if not data:
                             stdout_fd = -1
                             proc.stdout.close()
-                        output += data
+                        output += data.decode('utf-8', 'replace')
 
             if stdout_fd > -1:
                 break
@@ -363,7 +373,8 @@ class Machine:
         if not self._check_ssh_master():
             self._start_ssh_master()
 
-    def execute(self, command=None, script=None, input=None, environment={}, stdout=None, quiet=False, direct=False):
+    def execute(self, command=None, script=None, input=None, environment={},
+                stdout=None, quiet=False, direct=False, timeout=120):
         """Execute a shell command in the test machine and return its output.
 
         Either specify @command or @script
@@ -372,7 +383,8 @@ class Machine:
             command: The string to execute by /bin/sh.
             script: A multi-line script to execute in /bin/sh
             input: Input to send to the command
-            environment: Additional environmetn variables
+            environment: Additional environment variables
+            timeout: Applies if not already wrapped in a #Timeout context
         Returns:
             The command/script output as a string.
         """
@@ -404,7 +416,7 @@ class Machine:
 
         if command:
             assert not environment, "Not yet supported"
-            if isinstance(command, basestring):
+            if getattr(command, "strip", None): # Is this a string?
                 cmd += [command]
                 if not quiet:
                     self.message("+", command)
@@ -428,41 +440,43 @@ class Machine:
             subprocess.call(cmd, stdout=stdout)
             return
 
-        output = ""
-        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdin_fd = proc.stdin.fileno()
-        stdout_fd = proc.stdout.fileno()
-        stderr_fd = proc.stderr.fileno()
-        rset = [stdout_fd, stderr_fd]
-        wset = [stdin_fd]
-        while len(rset) > 0 or len(wset) > 0:
-            ret = select.select(rset, wset, [], 10)
-            for fd in ret[0]:
-                if fd == stdout_fd:
-                    data = os.read(fd, 1024)
-                    if data == "":
-                        rset.remove(stdout_fd)
-                        proc.stdout.close()
-                    else:
-                        if self.verbose:
-                            sys.stdout.write(data)
-                        output += data
-                elif fd == stderr_fd:
-                    data = os.read(fd, 1024)
-                    if data == "":
-                        rset.remove(stderr_fd)
-                        proc.stderr.close()
-                    elif not quiet or self.verbose:
-                        sys.stderr.write(data)
-            for fd in ret[1]:
-                if fd == stdin_fd:
-                    if input:
-                        num = os.write(fd, input)
-                        input = input[num:]
-                    if not input:
-                        wset.remove(stdin_fd)
-                        proc.stdin.close()
-        proc.wait()
+        with Timeout(seconds=timeout, error_message="Timed out on '%s'" % command, machine=self):
+            output = ""
+            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdin_fd = proc.stdin.fileno()
+            stdout_fd = proc.stdout.fileno()
+            stderr_fd = proc.stderr.fileno()
+            rset = [stdout_fd, stderr_fd]
+            wset = [stdin_fd]
+            while len(rset) > 0 or len(wset) > 0:
+                ret = select.select(rset, wset, [], 10)
+                for fd in ret[0]:
+                    if fd == stdout_fd:
+                        data = os.read(fd, 1024)
+                        if not data:
+                            rset.remove(stdout_fd)
+                            proc.stdout.close()
+                        else:
+                            data = data.decode('utf-8', 'replace')
+                            if self.verbose:
+                                sys.stdout.write(data)
+                            output += data
+                    elif fd == stderr_fd:
+                        data = os.read(fd, 1024)
+                        if not data:
+                            rset.remove(stderr_fd)
+                            proc.stderr.close()
+                        elif not quiet or self.verbose:
+                            sys.stderr.write(data.decode('utf-8', 'replace'))
+                for fd in ret[1]:
+                    if fd == stdin_fd:
+                        if input:
+                            num = os.write(fd, input.encode('utf-8'))
+                            input = input[num:]
+                        if not input:
+                            wset.remove(stdin_fd)
+                            proc.stdin.close()
+            proc.wait()
 
         if proc.returncode != 0:
             raise subprocess.CalledProcessError(proc.returncode, command, output=output)
@@ -586,7 +600,7 @@ class Machine:
 
     def _calc_identity(self):
         identity = os.path.join(LOCAL_DIR, "identity")
-        os.chmod(identity, 0600)
+        os.chmod(identity, 0o600)
         return identity
 
     def journal_messages(self, syslog_ids, log_level):
@@ -823,7 +837,7 @@ class VirtNetwork:
     def _lock(self, start, step=1, force=False):
         resources = os.path.join(tempfile.gettempdir(), ".cockpit-test-resources")
         if not os.path.exists(resources):
-            os.mkdir(resources, 0755)
+            os.mkdir(resources, 0o755)
         for port in range(start, start + (100 * step), step):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -969,8 +983,8 @@ class VirtMachine(Machine):
         self._cleanup()
 
         try:
-            os.makedirs(self.run_dir, 0750)
-        except OSError, ex:
+            os.makedirs(self.run_dir, 0o750)
+        except OSError as ex:
             if ex.errno != errno.EEXIST:
                 raise
 
@@ -1001,8 +1015,8 @@ class VirtMachine(Machine):
             keys["type"] = "kvm"
             keys["cpu"] = TEST_KVM_XML.format(**keys)
         else:
-            print >> sys.stderr, "WARNING: Starting virtual machine with emulation due to missing KVM"
-            print >> sys.stderr, "WARNING: Machine will run about 10-20 times slower"
+            sys.stderr.write("WARNING: Starting virtual machine with emulation due to missing KVM\n")
+            sys.stderr.write("WARNING: Machine will run about 10-20 times slower\n")
 
         keys.update(self.networking)
         keys["name"] = "{image}-{control}".format(**keys)
@@ -1021,9 +1035,9 @@ class VirtMachine(Machine):
         try:
             # print >> sys.stderr, test_domain_desc
             self._domain = self.virt_connection.createXML(test_domain_desc, libvirt.VIR_DOMAIN_START_AUTODESTROY)
-        except libvirt.libvirtError, le:
-            if 'already exists with uuid' in le.message:
-                raise RepeatableFailure("libvirt domain already exists: " + le.message)
+        except libvirt.libvirtError as le:
+            if 'already exists with uuid' in str(le):
+                raise RepeatableFailure("libvirt domain already exists: " + str(le))
             else:
                 raise
 
@@ -1058,11 +1072,11 @@ class VirtMachine(Machine):
                     self.shutdown()
                 else:
                     self.kill()
-            except libvirt.libvirtError, le:
+            except libvirt.libvirtError as le:
                 # the domain may have already been freed (shutdown) while the console was running
                 self.message("libvirt error during shutdown: %s" % (le.get_error_message()))
 
-        except OSError, ex:
+        except OSError as ex:
             raise Failure("Failed to launch virsh command: {0}".format(ex.strerror))
         finally:
             self._cleanup()
@@ -1082,7 +1096,7 @@ class VirtMachine(Machine):
             proc = subprocess.Popen(["virt-viewer", str(self._domain.ID())])
             sys.stderr.write(message)
             proc.wait()
-        except OSError, ex:
+        except OSError as ex:
             raise Failure("Failed to launch virt-viewer command: {0}".format(ex.strerror))
         finally:
             self._cleanup()
@@ -1095,7 +1109,7 @@ class VirtMachine(Machine):
         if not os.path.exists(image_file):
             try:
                 subprocess.check_call([ "image-download", image_file ])
-            except OSError, ex:
+            except OSError as ex:
                 if ex.errno != errno.ENOENT:
                     raise
         return image_file
@@ -1137,7 +1151,8 @@ class VirtMachine(Machine):
             expect " ~]# "
             exit 0
         """
-        expect = subprocess.Popen(["expect", "--", "-", str(self._domain.ID())], stdin=subprocess.PIPE)
+        expect = subprocess.Popen(["expect", "--", "-", str(self._domain.ID())], stdin=subprocess.PIPE,
+                                  universal_newlines=True)
         expect.communicate(SCRIPT)
 
     def wait_boot(self, timeout_sec=120):
@@ -1165,7 +1180,7 @@ class VirtMachine(Machine):
                 os.unlink(self._transient_image)
         except:
             (type, value, traceback) = sys.exc_info()
-            print >> sys.stderr, "WARNING: Cleanup failed:", str(value)
+            sys.stderr.write("WARNING: Cleanup failed:%s\n" % value)
 
     def kill(self):
         # stop system immediately, with potential data loss
@@ -1192,8 +1207,8 @@ class VirtMachine(Machine):
                     with stdchannel_redirected(sys.stderr, os.devnull):
                         if not self._domain.isActive():
                             break
-                except libvirt.libvirtError, le:
-                    if 'no domain' in le.message or 'not found' in le.message:
+                except libvirt.libvirtError as le:
+                    if 'no domain' in str(le) or 'not found' in str(le):
                         break
                     raise
                 time.sleep(1)
@@ -1202,7 +1217,7 @@ class VirtMachine(Machine):
             try:
                 with stdchannel_redirected(sys.stderr, os.devnull):
                     self._domain.destroyFlags(libvirt.VIR_DOMAIN_DESTROY_DEFAULT)
-            except libvirt.libvirtError, le:
+            except libvirt.libvirtError as le:
                 if 'not found' not in str(le):
                     raise
         self._cleanup(quick=True)
@@ -1222,8 +1237,8 @@ class VirtMachine(Machine):
         index = len(self._disks)
 
         try:
-            os.makedirs(self.run_dir, 0750)
-        except OSError, ex:
+            os.makedirs(self.run_dir, 0o750)
+        except OSError as ex:
             if ex.errno != errno.EEXIST:
                 raise
 

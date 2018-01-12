@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 # This file is part of Cockpit.
@@ -29,7 +29,6 @@ import traceback
 
 sys.dont_write_bytecode = True
 
-import task
 from task import github
 from task import sink
 
@@ -60,7 +59,7 @@ def main():
         task = PullTask(name, revision, opts.ref, opts.context, opts.rebase,
                         github_revision=github_revision)
         ret = task.run(opts)
-    except RuntimeError, ex:
+    except RuntimeError as ex:
         ret = str(ex)
 
     if ret:
@@ -148,7 +147,7 @@ class PullTask(object):
 
         # Include information about which base we're testing against
         if self.base:
-            commit = subprocess.check_output([ "git", "rev-parse", "origin/" + self.base ]).strip()
+            commit = subprocess.check_output([ "git", "rev-parse", "origin/" + self.base ], universal_newlines=True).strip()
             status["base"] = commit
 
         (prefix, unused, image) = self.context.partition("/")
@@ -172,22 +171,6 @@ class PullTask(object):
             traceback.print_exc()
             return "Rebase failed"
 
-        try:
-            task.checkout(base=self.base)
-        except subprocess.CalledProcessError:
-            traceback.print_exc()
-            return "Rebase checkout of bots failed"
-
-        # If the bots directory changed during all of this, then respawn
-        if subprocess.call(["git", "diff", "--quiet", "--exit-code", "--staged", origin_base, "--", "bots/"]) == 1:
-            assert "TEST_INVOKE_RESPAWN" not in os.environ
-            os.environ["TEST_INVOKE_RESPAWN"] = "1"
-            sys.stderr.write("Rebase complete ... respawning\n")
-            if self.sink:
-                self.stop_publishing(None)
-            os.execv(__file__, sys.argv)
-            assert False, "not reached"
-
         return None
 
     def prepare(self, prefix, value, image, verbose=False):
@@ -202,6 +185,16 @@ class PullTask(object):
 
         except subprocess.CalledProcessError:
             return "Downloading of additional images failed"
+
+        try:
+            # Download some additional necessary state
+            subprocess.check_call([ os.path.join(BOTS, "image-download"),
+                "--state", "tests-learn-2.nn", "tests-learn-4-1.model"
+            ])
+
+        except subprocess.CalledProcessError:
+            sys.stderr.write("Downloading of additional state failed")
+
 
         # The images not yet prepared are symlinked from the bots/images
         # directory into the test/images directory. This allows for other branches to
@@ -237,7 +230,7 @@ class PullTask(object):
         # COMPAT: Create a legacy tmp/run directory to prevent races during testing
         try:
             os.makedirs(os.path.join(BASE, "test", "tmp", "run"))
-        except OSError, ex:
+        except OSError as ex:
             if ex.errno != errno.EEXIST:
                 raise
 
@@ -245,8 +238,11 @@ class PullTask(object):
         cmd = [ os.path.join(BOTS, "image-prepare") ]
         if prefix == "image" or prefix == "container":
             cmd += [ "--containers" ]
-        if verbose:
-            cmd += [ "--verbose" ]
+        cmd += [ "--verbose" ]
+
+        # Flush our own output before invoking the command
+        sys.stdout.flush()
+        sys.stderr.flush()
 
         try:
             # Do the basic prepare
@@ -269,16 +265,9 @@ class PullTask(object):
         def mark_passed():
             if "github" in sink.status:
                 self.github_status_data["state"] = "success"
-        def mark_respawn():
-            if "github" in sink.status:
-                self.github_status_data["state"] = "pending"
-        if isinstance(ret, basestring):
+        if isinstance(ret, str):
             message = ret
             mark_failed()
-        elif ret is None:
-            message = "Rebased"
-            mark_respawn()
-            ret = 0 # A failure, but not for this script
         elif ret == 0:
             message = "Tests passed"
             mark_passed()
@@ -295,44 +284,41 @@ class PullTask(object):
         return ret
 
     def run(self, opts):
-        if "TEST_INVOKE_RESPAWN" not in os.environ:
-            head = subprocess.check_output([ "git", "rev-parse", "HEAD" ]).strip()
-            if self.ref:
-                if not opts.offline:
-                    subprocess.check_call([ "git", "fetch", "origin", self.ref ])
-                if not self.revision:
-                    self.revision = subprocess.check_output([ "git", "rev-parse", "FETCH_HEAD" ]).strip()
-                # Force a checkout of the ref if not already checked out
-                if not head.lower().startswith(self.revision.lower()):
-                    subprocess.check_call([ "git", "checkout", "-f", self.revision ])
+        if opts.publish:
+            self.start_publishing(opts.publish)
+            os.environ["TEST_ATTACHMENTS"] = self.sink.attachments
 
+        head = subprocess.check_output([ "git", "rev-parse", "HEAD" ], universal_newlines=True).strip()
+        if self.ref:
+            if not opts.offline:
+                subprocess.check_call([ "git", "fetch", "origin", self.ref ])
             if not self.revision:
-                self.revision = head
+                self.revision = subprocess.check_output([ "git", "rev-parse", "FETCH_HEAD" ], universal_newlines=True).strip()
+            # Force a checkout of the ref if not already checked out
+            if not head.lower().startswith(self.revision.lower()):
+                subprocess.check_call([ "git", "checkout", "-f", self.revision ])
 
-            # Retrieve information about our base branch and master (for bots/)
-            if self.base and not opts.offline:
-                subprocess.check_call([ "git", "fetch", "origin", self.base, "master" ])
+        if not self.revision:
+            self.revision = head
 
-            # Clean out the test directory
-            subprocess.check_call([ "git", "clean", "-d", "--force", "--quiet", "-x", "--", "test/" ])
+        # Retrieve information about our base branch and master (for bots/)
+        if self.base and not opts.offline:
+            subprocess.check_call([ "git", "fetch", "origin", self.base, "master" ])
 
-            os.environ["TEST_NAME"] = self.name
-            os.environ["TEST_REVISION"] = self.revision
+        # Clean out the test directory
+        subprocess.check_call([ "git", "clean", "-d", "--force", "--quiet", "-x", "--", "test/" ])
+
+        os.environ["TEST_NAME"] = self.name
+        os.environ["TEST_REVISION"] = self.revision
 
         # Split a value like verify/fedora-atomic
         (prefix, unused, value) = self.context.partition("/")
 
-        if prefix in [ 'selenium' ]:
-            image = 'fedora-25'
-        elif prefix in [ 'container' ]:
+        if prefix in [ 'selenium', 'container', 'avocado' ]:
             image = 'fedora-26'
         else:
             image = value
         os.environ["TEST_OS"] = image
-
-        if opts.publish:
-            self.start_publishing(opts.publish)
-            os.environ["TEST_ATTACHMENTS"] = self.sink.attachments
 
         msg = "Testing {0} for {1} with {2} on {3}...\n".format(self.github_revision, self.name,
                                                                 self.context, HOSTNAME)
@@ -340,10 +326,8 @@ class PullTask(object):
 
         ret = None
 
-        # If a respawn then this is aleady done
-        if "TEST_INVOKE_RESPAWN" not in os.environ:
-            if self.base:
-                ret = self.rebase()
+        if self.base:
+            ret = self.rebase()
 
         test = os.path.join(BOTS, "..", "test")
 
@@ -382,6 +366,10 @@ class PullTask(object):
         # Prepare the image to run
         if not ret:
             ret = self.prepare(prefix, value, image, opts.verbose)
+
+        # Flush our own output before running command
+        sys.stdout.flush()
+        sys.stderr.flush()
 
         # Actually run the tests
         if not ret:

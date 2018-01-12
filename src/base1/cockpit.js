@@ -26,8 +26,6 @@ try {
 
 var mock = mock || { };
 
-var phantom_checkpoint = phantom_checkpoint || function () { };
-
 (function() {
 "use strict";
 
@@ -549,7 +547,6 @@ function Transport() {
         else
             process_message(channel, payload);
 
-        phantom_checkpoint();
         return true;
     };
 
@@ -2090,6 +2087,15 @@ function factory() {
             process(beg, items, mapping);
             stash(beg, items, mapping);
         };
+
+        self.close = function () {
+            var grid, id;
+            for (id in registered) {
+                grid = registered[id];
+                if (grid && grid.grid)
+                    grid.grid.remove_sink(self);
+            }
+        };
     }
 
     cockpit.series = function series(interval, cache, fetch) {
@@ -2204,6 +2210,17 @@ function factory() {
             for (i = 0; i < ilen; i++) {
                 if (rows[i] === row) {
                     rows.splice(i, 1);
+                    break;
+                }
+            }
+        };
+
+        self.remove_sink = function remove_sink(sink) {
+            var i, len = sinks.length;
+            for (i = 0; i < len; i++) {
+                if (sinks[i].sink === sink) {
+                    sinks[i].links.remove();
+                    sinks.splice(i, 1);
                     break;
                 }
             }
@@ -4482,6 +4499,9 @@ function factory() {
 
         self.close = function close(options) {
             var i, len = channels.length;
+            if (self.series)
+                self.series.close();
+
             for (i = 0; i < len; i++)
                 channels[i].close(options);
         };
@@ -4504,17 +4524,13 @@ function factory() {
             window.parent.postMessage("\n{ \"command\": \"oops\" }", transport_origin);
     };
 
-    var old_onerror;
-
-    if (window.navigator.userAgent.indexOf("PhantomJS") == -1) {
-        old_onerror = window.onerror;
-        window.onerror = function(msg, url, line) {
-            cockpit.oops();
-            if (old_onerror)
-                return old_onerror(msg, url, line);
-            return false;
-        };
-    }
+    var old_onerror = window.onerror;
+    window.onerror = function(msg, url, line) {
+        cockpit.oops();
+        if (old_onerror)
+            return old_onerror(msg, url, line);
+        return false;
+    };
 
     return cockpit;
 } /* scope end */

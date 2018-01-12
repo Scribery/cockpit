@@ -25,6 +25,11 @@
 
     var utils = require('./utils');
 
+    var python = require("python.jsx");
+    var inotify_py = require("raw!inotify.py");
+    var nfs_mounts_py = require("raw!./nfs-mounts.py");
+    var vdo_monitor_py = require("raw!./vdo-monitor.py");
+
     /* STORAGED CLIENT
      */
 
@@ -35,6 +40,8 @@
 
     var client = { };
 
+    cockpit.event_target(client);
+
     /* Metrics
      */
 
@@ -44,6 +51,8 @@
             data: { },
             close: close
         };
+
+        cockpit.event_target(self);
 
         function handle_meta(msg) {
             self.data = { };
@@ -70,7 +79,7 @@
                 }
             }
             if (changed)
-                $(self).triggerHandler('changed');
+                self.dispatchEvent('changed');
         }
 
         var channel = cockpit.channel({ payload: "metrics1",
@@ -145,16 +154,7 @@
         client.blocks_crypto = proxies("Encrypted");
         client.blocks_swap = proxies("Swapspace");
         client.iscsi_sessions = proxies("ISCSI.Session");
-        client.storaged_jobs = proxies("Job");
-
-        if (STORAGED_SERVICE != "org.freedesktop.UDisks2") {
-            client.udisks_client = cockpit.dbus("org.freedesktop.UDisks2");
-            client.udisks_jobs = client.udisks_client.proxies("org.freedesktop.UDisks2.Job",
-                                                              "/org/freedesktop/UDisks2");
-        } else {
-            client.udisks_client = null;
-            client.udisks_jobs = { };
-        }
+        client.jobs = proxies("Job");
     }
 
     /* Monitors
@@ -243,7 +243,7 @@
 
         client.slashdevs_block = { };
         function enter_slashdev(block, enc) {
-            client.slashdevs_block[utils.decode_filename(enc).replace(/^\/dev\//, "")] = block;
+            client.slashdevs_block[utils.decode_filename(enc)] = block;
         }
         for (path in client.blocks) {
             block = client.blocks[path];
@@ -332,6 +332,24 @@
         for (path in client.blocks_partitions) {
             client.blocks_partitions[path].sort(function (a, b) { return a.Offset - b.Offset; });
         }
+
+        client.path_jobs = { };
+        function enter_job(job) {
+            if (!job.Objects || !job.Objects.length)
+                return;
+            job.Objects.forEach(function (path) {
+                client.path_jobs[path] = job;
+                var parent = utils.get_parent(client, path);
+                while (parent) {
+                    path = parent;
+                    parent = utils.get_parent(client, path);
+                }
+                client.path_jobs[path] = job;
+            });
+        }
+        for (path in client.jobs) {
+            enter_job(client.jobs[path]);
+        }
     }
 
     function init_model(callback) {
@@ -355,6 +373,20 @@
         }
 
         function enable_features() {
+            return enable_udisks_features().then(function (features) {
+                return cockpit.spawn([ "which", "vdo" ], { err: "ignore" }).then(
+                    function () {
+                        features.vdo = true;
+                        client.vdo_overlay.start();
+                        return features;
+                    },
+                    function () {
+                        return features;
+                    });
+            });
+        }
+
+        function enable_udisks_features() {
             if (!client.manager.valid)
                 return cockpit.resolve(false);
             if (!client.manager.EnableModules)
@@ -390,10 +422,7 @@
 
                 $(client.storaged_client).on('notify', function () {
                     update_indices();
-                    $(client).triggerHandler('changed');
-                });
-                $(client.udisks_jobs).on('added removed changed', function () {
-                    $(client).triggerHandler('changed');
+                    client.dispatchEvent("changed");
                 });
                 update_indices();
             });
@@ -403,6 +432,278 @@
     client.older_than = function older_than(version) {
         return utils.compare_versions(this.manager.Version, version) < 0;
     };
+
+    /* NFS mounts
+     */
+
+    function nfs_mounts() {
+        var self = {
+            entries: [ ],
+            fsys_sizes: { },
+
+            get_fsys_size: get_fsys_size,
+            entry_users: entry_users,
+
+            update_entry: update_entry,
+            add_entry: add_entry,
+            remove_entry: remove_entry,
+
+            mount_entry: mount_entry,
+            unmount_entry: unmount_entry,
+            stop_and_unmount_entry: stop_and_unmount_entry,
+            stop_and_remove_entry: stop_and_remove_entry
+        };
+
+        function spawn_nfs_mounts(args) {
+            return python.spawn([ inotify_py, nfs_mounts_py ], args, { superuser: "try", err: "message" });
+        }
+
+        var buf = "";
+        spawn_nfs_mounts([ "monitor" ])
+            .stream(function (output) {
+                var lines;
+
+                buf += output;
+                lines = buf.split("\n");
+                buf = lines[lines.length-1];
+                if (lines.length >= 2) {
+                    self.entries = JSON.parse(lines[lines.length-2]);
+                    self.fsys_sizes = { };
+                    client.dispatchEvent('changed');
+                }
+            }).
+            fail(function (error) {
+                if (error != "closed") {
+                    console.warn(error);
+                }
+            });
+
+        function get_fsys_size(entry) {
+            var path = entry.fields[1];
+            if (self.fsys_sizes[path])
+                return self.fsys_sizes[path];
+
+            if (self.fsys_sizes[path] === false)
+                return null;
+
+            self.fsys_sizes[path] = false;
+            cockpit.spawn([ "stat", "-f", "-c", "[ %S, %f, %b ]", path ], { err: "message" })
+                .done(function (output) {
+                    var data = JSON.parse(output);
+                    self.fsys_sizes[path] = [ (data[2]-data[1])*data[0], data[2]*data[0] ];
+                    client.dispatchEvent('changed');
+                })
+                .fail(function () {
+                    self.fsys_sizes[path] = [ 0, 0 ];
+                    client.dispatchEvent('changed');
+                });
+
+            return null;
+        }
+
+        function update_entry(entry, new_fields) {
+            return spawn_nfs_mounts([ "update", JSON.stringify(entry), JSON.stringify(new_fields) ]);
+        }
+
+        function add_entry(fields) {
+            return spawn_nfs_mounts([ "add", JSON.stringify(fields) ]);
+        }
+
+        function remove_entry(entry) {
+            return spawn_nfs_mounts([ "remove", JSON.stringify(entry) ]);
+        }
+
+        function mount_entry(entry) {
+            return spawn_nfs_mounts([ "mount", JSON.stringify(entry) ]);
+        }
+
+        function unmount_entry(entry) {
+            return spawn_nfs_mounts([ "unmount", JSON.stringify(entry) ]);
+        }
+
+        function stop_and_unmount_entry(users, entry) {
+            var units = users.map(function (u) { return u.unit; });
+            return spawn_nfs_mounts([ "stop-and-unmount", JSON.stringify(units), JSON.stringify(entry) ]);
+        }
+
+        function stop_and_remove_entry(users, entry) {
+            var units = users.map(function (u) { return u.unit; });
+            return spawn_nfs_mounts([ "stop-and-remove", JSON.stringify(units), JSON.stringify(entry) ]);
+        }
+
+        function entry_users(entry) {
+            return spawn_nfs_mounts([ "users", JSON.stringify(entry) ]).then(JSON.parse);
+        }
+
+        return self;
+    }
+
+    client.nfs = nfs_mounts();
+
+    /* VDO */
+
+    function vdo_overlay() {
+        var self = {
+            start: start,
+
+            volumes: [ ],
+
+            by_name: { },
+            by_dev: { },
+            by_backing_dev: { },
+
+            find_by_block: find_by_block,
+            find_by_backing_block: find_by_backing_block,
+
+            create: create
+        };
+
+        function cmd(args) {
+            return cockpit.spawn([ "vdo" ].concat(args),
+                                 { superuser: true,
+                                   err: "message"
+                                 });
+        }
+
+        function update(data) {
+            self.by_name = { };
+            self.by_dev = { };
+            self.by_backing_dev = { };
+
+            self.volumes = data.map(function (vol, index) {
+                var name = vol.name;
+
+                function volcmd(args) {
+                    return cmd(args.concat([ "--name", name ]));
+                }
+
+                var v = { name: name,
+                          broken: vol.broken,
+                          dev: "/dev/mapper/" + name,
+                          backing_dev: vol.device,
+                          logical_size: vol.logical_size,
+                          physical_size: vol.physical_size,
+                          index_mem: vol.index_mem,
+                          compression: vol.compression,
+                          deduplication: vol.deduplication,
+                          activated: vol.activated,
+
+                          set_compression: function(val) {
+                              return volcmd([ val? "enableCompression" : "disableCompression" ]);
+                          },
+
+                          set_deduplication: function(val) {
+                              return volcmd([ val? "enableDeduplication" : "disableDeduplication" ]);
+                          },
+
+                          set_activate: function(val) {
+                              return volcmd([ val? "activate" : "deactivate" ]);
+                          },
+
+                          start: function() {
+                              return volcmd([ "start" ]);
+                          },
+
+                          stop: function() {
+                              return volcmd([ "stop" ]);
+                          },
+
+                          remove: function() {
+                              return volcmd([ "remove" ]);
+                          },
+
+                          force_remove: function() {
+                              return volcmd([ "remove", "--force" ]);
+                          },
+
+                          grow_physical: function() {
+                              return volcmd([ "growPhysical" ]);
+                          },
+
+                          grow_logical: function(lsize) {
+                              return volcmd([ "growLogical", "--vdoLogicalSize", lsize + "B" ]);
+                          }
+                        };
+
+                self.by_name[v.name] = v;
+                self.by_dev[v.dev] = v;
+                self.by_backing_dev[v.backing_dev] = v;
+
+                return v;
+            });
+
+            // We trigger a change on the client right away and not
+            // just on the vdo_overlay since this data is used all
+            // over the place...
+
+            client.dispatchEvent("changed");
+        }
+
+        function start() {
+            var buf = "";
+            python.spawn([ inotify_py, vdo_monitor_py ], [ ], { superuser: "try", err: "message" })
+                .stream(function (output) {
+                    var lines;
+
+                    buf += output;
+                    lines = buf.split("\n");
+                    buf = lines[lines.length-1];
+                    if (lines.length >= 2) {
+                        self.entries = JSON.parse(lines[lines.length-2]);
+                        self.fsys_sizes = { };
+                        $(self).triggerHandler('changed');
+                        update(JSON.parse(lines[lines.length-2]));
+                    }
+                }).
+                fail(function (error) {
+                    if (error != "closed") {
+                        console.warn(error);
+                    }
+                });
+        }
+
+        function some(array, func) {
+            var i;
+            for (i = 0; i < array.length; i++) {
+                var val = func(array[i]);
+                if (val)
+                    return val;
+            }
+            return null;
+        }
+
+        function find_by_block(block) {
+            function check(encoded) { return self.by_dev[utils.decode_filename(encoded)]; }
+            return check(block.Device) || some(block.Symlinks, check);
+        }
+
+        function find_by_backing_block(block) {
+            function check(encoded) { return self.by_backing_dev[utils.decode_filename(encoded)]; }
+            return check(block.Device) || some(block.Symlinks, check);
+        }
+
+        function create(options) {
+            var args = [ "create", "--name", options.name,
+                         "--device", utils.decode_filename(options.block.PreferredDevice) ];
+            if (options.logical_size !== undefined)
+                args.push("--vdoLogicalSize", options.logical_size + "B");
+            if (options.index_mem !== undefined)
+                args.push("--indexMem", options.index_mem / (1024*1024*1024));
+            if (options.compression !== undefined)
+                args.push("--compression", options.compression? "enabled" : "disabled");
+            if (options.deduplication !== undefined)
+                args.push("--deduplication", options.deduplication? "enabled" : "disabled");
+            if (options.emulate_512 !== undefined)
+                args.push("--emulate512", options.emulate_512? "enabled" : "disabled");
+            if (options.asynchronous !== undefined)
+                args.push("--writePolicy", options.asynchronous? "async" : "sync");
+            return cmd(args);
+        }
+
+        return self;
+    }
+
+    client.vdo_overlay = vdo_overlay();
 
     function init_manager() {
         /* Storaged 2.6 and later uses the UDisks2 API names, but try the

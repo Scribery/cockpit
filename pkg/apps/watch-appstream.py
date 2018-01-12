@@ -7,9 +7,6 @@ import gzip
 import xml.etree.ElementTree as ET
 import json
 
-import ctypes
-import struct
-
 # Our own little abstraction on top of inotify.  This only supports
 # watching directories non-recursively, but it also supports watching
 # directories that come and go into and out of existence.
@@ -17,51 +14,6 @@ import struct
 # We could use pyinotify for this, but it would only be able to
 # replace the Inotify class; we would still need all the logic in the
 # Watcher class.
-
-IN_CLOSE_WRITE = 0x00000008
-IN_MOVED_FROM  = 0x00000040
-IN_MOVED_TO    = 0x00000080
-IN_CREATE      = 0x00000100
-IN_DELETE      = 0x00000200
-IN_DELETE_SELF = 0x00000400
-IN_MOVE_SELF   = 0x00000800
-
-class Inotify:
-    def __init__(self):
-        self._libc = ctypes.CDLL(None, use_errno=True)
-        self._get_errno_func = ctypes.get_errno
-
-        self._libc.inotify_init.argtypes = []
-        self._libc.inotify_init.restype = ctypes.c_int
-        self._libc.inotify_add_watch.argtypes = [ctypes.c_int, ctypes.c_char_p,
-                                                 ctypes.c_uint32]
-        self._libc.inotify_add_watch.restype = ctypes.c_int
-        self._libc.inotify_rm_watch.argtypes = [ctypes.c_int, ctypes.c_int]
-        self._libc.inotify_rm_watch.restype = ctypes.c_int
-
-        self.fd = self._libc.inotify_init()
-
-    def add_watch(self, path, mask):
-        path = ctypes.create_string_buffer(path.encode(sys.getfilesystemencoding()))
-        wd = self._libc.inotify_add_watch(self.fd, path, mask)
-        if wd < 0:
-            sys.stderr.write("can't add watch for %s: %s\n" % (path, os.strerror(self._get_errno_func())))
-        return wd
-
-    def rem_watch(self, wd):
-        if self._libc.inotify_rm_watch(self.fd, wd) < 0:
-            sys.stderr.write("can't remove watch: %s\n" % (os.strerror(self._get_errno_func())))
-
-    def run(self, callback):
-        while True:
-            buf = os.read(self.fd, 4096) # XXX - handle errors
-            pos = 0
-            while pos < len(buf):
-                (wd, mask, cookie, name_len) = struct.unpack('iIII', buf[pos:pos+16])
-                pos += 16
-                (name,) = struct.unpack('%ds' % name_len, buf[pos:pos + name_len])
-                pos += name_len
-                callback(wd, mask, name.decode().rstrip('\0'))
 
 class Watcher:
 
@@ -242,10 +194,19 @@ def convert_launchables(xml):
 
     return ables
 
+def convert_urls(xml):
+    urls = [ ]
+
+    for url in xml.iter('url'):
+        urls.append({ 'type': url.attrib['type'], 'link': url.text })
+
+    return urls
+
 def convert_collection_component(dir, origin, xml):
     id = element_value(xml, 'id')
     pkgname = element_value(xml, 'pkgname')
     launchables = convert_launchables(xml)
+    urls = convert_urls(xml)
 
     if not id or not pkgname or len(launchables) == 0:
         return None
@@ -258,7 +219,8 @@ def convert_collection_component(dir, origin, xml):
         'description': convert_description(element(xml, 'description')),
         'icon': find_and_convert_icon(dir, origin, xml),
         'screenshots': convert_screenshots(element(xml, 'screenshots')),
-        'launchables': launchables
+        'launchables': launchables,
+        'urls': urls
     }
 
 def convert_upstream_component(file, xml):
@@ -269,6 +231,8 @@ def convert_upstream_component(file, xml):
     if len(launchables) ==  0:
         return None
 
+    urls = convert_urls(xml)
+
     return {
         'id': element_value(xml, 'id'),
         'name': element_value(xml, 'name'),
@@ -278,7 +242,8 @@ def convert_upstream_component(file, xml):
         'screenshots': convert_screenshots(element(xml, 'screenshots')),
         'launchables': launchables,
         'installed': True,
-        'file': file
+        'file': file,
+        'urls': urls
     }
 
 class MetainfoDB:

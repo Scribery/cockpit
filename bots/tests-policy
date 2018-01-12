@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 # This file is part of Cockpit.
@@ -25,13 +25,25 @@ import re
 import os
 import socket
 import sys
+import time
 import traceback
+import warnings
 
 sys.dont_write_bytecode = True
 
 from task import github
 
-BOTS = os.path.join(os.path.dirname(__file__))
+try:
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore",category=DeprecationWarning)
+        import learn.learn1
+        import learn.cluster
+    WITH_LEARNING = True
+except ImportError:
+    WITH_LEARNING = False
+
+BOTS = os.path.dirname(os.path.realpath(__file__))
+DATA = os.path.join(os.environ.get("TEST_DATA", BOTS), "images")
 
 def main():
     script = os.path.basename(__file__)
@@ -82,11 +94,13 @@ def main():
             output = filterSkip(output, "Known issue #{0}".format(number))
         elif checkRetry(output):
             output = filterRetry(output, "# RETRY due to failure of test harness or framework")
+        else:
+            output = guessFlake(output, context)
 
         sys.stdout.write(output)
         return 0
 
-    except RuntimeError, ex:
+    except RuntimeError as ex:
         sys.stderr.write("{0}: {1}\n".format(script, ex))
         return 1
 
@@ -111,6 +125,70 @@ def filterRetry(output, prefix):
             lines[i] = prefix
     return "\n".join(lines)
 
+# Figure out the name from a failed test
+def parseName(output):
+    for line in output.split("\n"):
+        if line.startswith("not ok "):
+            line = line[7:]
+            while line[0].isspace() or line[0].isdigit():
+                line = line[1:]
+            (name, delim, directive) = line.partition("#")
+            (name, delim, directive) = name.partition("duration")
+            name = name.strip()
+            return name
+    return ""
+
+# -----------------------------------------------------------------------------
+# Flakiness Checks
+
+def guessFlake(output, context):
+    if not WITH_LEARNING:
+        return output
+
+    # The two different models we're using
+    network = learn.learn1.load(DATA)
+    model = learn.cluster.load(DATA)
+
+    # Build up an item just like in tests-data
+    item = {
+        "pull": None,
+        "revision": os.environ.get("TEST_REVISION"),
+        "status": "failure",
+        "context": context,
+        "date": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "merged": None,
+        "test": parseName(output),
+        "url": None,
+        "log": output
+    }
+
+    # The old model
+    if network:
+        pred_proba = network.predict_proba(item)
+        if max(pred_proba) >= 0.5:
+            if int(pred_proba[1] >= pred_proba[0]) == 1:
+                output += "\n# Flake probability: {0:.1f}% (neural network)\n".format(pred_proba[1] * 100)
+
+    # The new model
+    if model:
+        result = model.predict([ item ])[0]
+        if result:
+            cluster = model.clusters[result[0]]
+            analysis = cluster.analyze()
+            merged = analysis["merged"][0]
+            print(repr(merged))
+            if merged[0] is None:
+                output += "\n# Flake unknown {0:.1f}% (clustering)\n".format(merged[1] * 100)
+            elif merged[0]:
+                output += "\n# Flake likely {0:.1f}% (clustering)\n".format(merged[1] * 100)
+            else:
+                output += "\n# Flake unlikely {0:.1f}% (clustering)\n".format(merged[1] * 100)
+            if analysis["trackers"]:
+                tracker = analysis["trackers"][0]
+                output += "\n# Flake tracked {0} likelyhood {1:.1f} (clustering)\n".format(tracker[0], tracker[1])
+
+    return output
+
 # -----------------------------------------------------------------------------
 # Retry policy
 
@@ -124,18 +202,6 @@ def checkRetry(trace):
     #
 
     trace = normalize_traceback(trace)
-
-    # HACK: An issue in phantomjs and QtWebkit
-    # http://stackoverflow.com/questions/35337304/qnetworkreply-network-access-is-disabled-in-qwebview
-    # https://github.com/owncloud/client/issues/3600
-    # https://github.com/ariya/phantomjs/issues/14789
-    if "PhantomJS or driver broken" in trace:
-        return True
-
-    # HACK: A race issue in phantomjs that happens randomly
-    # https://github.com/ariya/phantomjs/issues/12750
-    if "Resource Error: Operation canceled" in trace:
-        return True
 
     # HACK: Interacting with sshd during boot is not always predictable
     # We're using an implementation detail of the server as our "way in" for testing.
@@ -231,7 +297,7 @@ def update_known_issue(api, number, err, details, context, timestamp=None):
                                 header[header_idx] = " ".join(rec_entries)
                         latest[0] = "\n".join(header)
                         # list of recent occurrences
-                        occurrences = filter(None, latest[1].split("\n"))
+                        occurrences = [_f for _f in latest[1].split("\n") if _f]
                         occurrences.append("- {0}\n".format(link))
                         # only keep the last 10
                         if len(occurrences) > 10:

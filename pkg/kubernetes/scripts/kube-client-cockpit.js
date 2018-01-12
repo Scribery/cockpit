@@ -38,7 +38,13 @@
         try {
             obj = JSON.parse(response.data);
         } catch(e) {
-            return;
+            // Some kubernetes versions message up json reponses
+            if (response.data && response.headers &&
+                response.headers["Content-Type"] === "text/plain") {
+                obj = { message: response.data };
+            } else {
+                return;
+            }
         }
 
         if (obj && obj.message)
@@ -1183,9 +1189,18 @@
             if (cockpit && cockpit.sessionStorage && cockpit.localStorage)
                 base = cockpit;
 
+            /* Some browsers fail localStorage access due to corruption, preventing Cockpit login*/
+            var localStorage;
+            try {
+                localStorage = base.localStorage;
+            } catch(ex) {
+                localStorage = base.sessionStorage;
+                console.warn(String(ex));
+            }
+
             return {
                 sessionStorage: base.sessionStorage,
-                localStorage: base.localStorage
+                localStorage: localStorage
             };
         }
     ])

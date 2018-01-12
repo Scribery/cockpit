@@ -50,6 +50,7 @@ SUFFIXES = \
 	.map .map.gz \
 	.mo .po \
 	.service .service.in \
+	.socket .socket.in \
 	.svg .svg.gz \
 	.woff .woff.gz \
 	.1 .8 .5 \
@@ -103,6 +104,7 @@ SUBST_RULE = \
 	$(AM_V_GEN) $(MKDIR_P) $(dir $@) && sed \
 	-e 's,[@]datadir[@],$(datadir),g' \
 	-e 's,[@]libexecdir[@],$(libexecdir),g' \
+	-e 's,[@]sysconfdir[@],$(sysconfdir),g' \
 	-e 's,[@]libdir[@],$(libdir),g' \
 	-e 's,[@]includedir[@],$(includedir),g' \
 	-e 's,[@]bindir[@],$(bindir),g' \
@@ -133,6 +135,8 @@ SUBST_RULE = \
 .map.map.gz:
 	$(GZ_RULE)
 .service.in.service:
+	$(SUBST_RULE)
+.socket.in.socket:
 	$(SUBST_RULE)
 .svg.svg.gz:
 	$(GZ_RULE)
@@ -171,7 +175,7 @@ V_WEBPACK = $(V_WEBPACK_$(V))
 V_WEBPACK_ = $(V_WEBPACK_$(AM_DEFAULT_VERBOSITY))
 V_WEBPACK_0 = @echo "  WEBPACK  $(@:dist/%/Makefile.deps=%)";
 
-WEBPACK_MAKE = NODE_ENV=$(NODE_ENV) SRCDIR=$(srcdir) BUILDDIR=$(builddir) \
+WEBPACK_MAKE = NODE_ENV=$(NODE_ENV) SRCDIR=$(abspath $(srcdir)) BUILDDIR=$(builddir) \
 	       $(srcdir)/tools/missing $(srcdir)/tools/webpack-make
 
 WEBPACK_RULE = $(V_WEBPACK) $(WEBPACK_MAKE)
@@ -251,10 +255,11 @@ TEST_EXTENSIONS = .html .sh
 SH_LOG_DRIVER = $(top_srcdir)/tools/tap-driver
 HTML_LOG_DRIVER = $(top_srcdir)/tools/tap-driver
 HTML_TEST_SERVER = $(builddir)/test-server
-if WITH_PHANTOMJS
-HTML_LOG_COMPILER = $(PHANTOMJS) $(top_srcdir)/tools/tap-phantom --strip=$(top_srcdir)/ -- $(HTML_TEST_SERVER)
+
+if WITH_CHROMIUM
+HTML_LOG_COMPILER = $(top_srcdir)/test/common/tap-cdp --strip=$(top_srcdir)/ -- $(HTML_TEST_SERVER)
 else
-HTML_LOG_DRIVER_FLAGS = --missing=phantomjs
+HTML_LOG_DRIVER_FLAGS = --missing=chromium
 endif
 
 VALGRIND_ARGS = --trace-children=yes --quiet --error-exitcode=33 \
@@ -360,7 +365,7 @@ dist-hook::
 	[ ! -e $(distdir)/tools/cockpit.spec ] || $(srcdir)/tools/gen-spec-dependencies $(distdir)/tools/cockpit.spec
 
 DIST_TAR_MAIN = tar --format=posix -cf - "$(distdir)"
-DIST_TAR_CACHE = tar --format=posix -cf - --exclude='phantomjs*' --transform="s/^/$(distdir)/" \
+DIST_TAR_CACHE = tar --format=posix -cf - --transform="flags=r;s|^\./||" --transform="flags=r;s|^|$(distdir)/|" \
 	"$(srcdir)/node_modules" "$(srcdir)/package.json"
 
 DIST_ARCHIVES = \
