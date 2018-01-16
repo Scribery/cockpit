@@ -220,6 +220,9 @@ find %{buildroot}%{_datadir}/%{name}/machines -type f >> machines.list
 echo '%dir %{_datadir}/%{name}/ovirt' > ovirt.list
 find %{buildroot}%{_datadir}/%{name}/ovirt -type f >> ovirt.list
 
+echo '%dir %{_datadir}/%{name}/session_recording' > session_recording.list
+find %{buildroot}%{_datadir}/%{name}/session_recording -type f >> session_recording.list
+
 # on CentOS systems we don't have the required setroubleshoot-server packages
 %if 0%{?centos}
 rm -rf %{buildroot}%{_datadir}/%{name}/selinux
@@ -328,6 +331,14 @@ Requires: libvirt-client
 The Cockpit components for managing virtual machines.
 
 %files machines -f machines.list
+
+%package session_recording
+Summary: Cockpit Session Recording
+
+%description session_recording
+Cockpit Session Recording.
+
+%files session_recording -f session_recording.list
 
 %package ovirt
 Summary: Cockpit user interface for oVirt virtual machines
