@@ -271,6 +271,35 @@ function is_user_in_group(user, group) {
     return false;
 }
 
+function change_shell(user, shell) {
+    var dfd = cockpit.defer();
+
+    cockpit.spawn([ "chsh", "-s", shell, user ], {superuser: "require", err: "out" })
+        .done(function() {
+            dfd.resolve();
+        })
+        .fail(function(ex, response) {
+            if (ex.exit_status) {
+                console.log(ex);
+                if (response)
+                    ex = new Error(response);
+                else
+                    ex = new Error(_("Failed to change password"));
+            }
+            dfd.reject(ex);
+        });
+
+    return dfd.promise();
+}
+
+function turn_on_session_recording(user) {
+    return change_shell(user, "/usr/bin/tlog-rec-session");
+}
+
+function turn_off_session_recording(user) {
+    return change_shell(user, "/bin/bash");
+}
+
 var AccountItem = React.createClass({
     displayName: 'AccountItem',
     click: function(ev) {
@@ -632,6 +661,7 @@ PageAccount.prototype = {
         $('#add-authorized-key-dialog').on('hidden.bs.modal', function () {
             $("#authorized-keys-text").val("");
         });
+        $('#session-recording').on('change', $.proxy (this, "change_recorded", true, null));
     },
 
     setup_keys: function (user_name, home_dir) {
@@ -873,6 +903,32 @@ PageAccount.prototype = {
            });
     },
 
+    get_recorded: function() {
+        var self = this;
+        function get_shell(content) {
+            var accounts = parse_passwd_content(content);
+
+            for (var i = 0; i < accounts.length; i++) {
+                if (accounts[i]["name"] !== self.account_id)
+                    continue;
+
+                self.account = accounts[i];
+                if (self.account.shell === "/usr/bin/tlog-rec-session") {
+                    self.account.recorded = true;
+                } else {
+                    self.account.recorded = false;
+                }
+                self.update();
+            }
+        }
+
+        this.handle_passwd = cockpit.file('/etc/passwd');
+
+        this.handle_passwd.read()
+            .done(get_shell)
+            .fail(log_unexpected_error);
+    },
+
     enter: function(account_id) {
         this.account_id = account_id;
 
@@ -886,6 +942,7 @@ PageAccount.prototype = {
         this.get_locked();
         this.get_logged();
         this.get_expire();
+        this.get_recorded();
     },
 
     leave: function() {
@@ -975,6 +1032,9 @@ PageAccount.prototype = {
                 toggleClass("accounts-current-account",
                             this.user.id == this.account["uid"]);
 
+            // if user shell is /usr/bin/tlog-rec-session set checkbox
+            $("#session-recording").prop('checked', this.account.recorded);
+
         } else {
             $('#account').hide();
             $('#account-failure').show();
@@ -984,6 +1044,7 @@ PageAccount.prototype = {
             $('#account-locked').prop('checked', false);
             $('#account-change-roles-roles').html("");
             $('#account .breadcrumb .active').text("?");
+            $("#session-recording").prop('checked', false);
         }
         update_accounts_privileged();
     },
@@ -1098,6 +1159,17 @@ PageAccount.prototype = {
            .done($.proxy (this, "get_logged"))
            .fail(show_unexpected_error);
 
+    },
+
+    change_recorded: function(verify_status, desired_lock_state) {
+        desired_lock_state = desired_lock_state !== null ?
+            desired_lock_state : $('#session-recording').prop('checked');
+        var self = this;
+        if ( desired_lock_state === true ) {
+            turn_on_session_recording(self.account["name"]);
+        } else {
+            turn_off_session_recording(self.account["name"]);
+        }
     },
 };
 
