@@ -448,6 +448,19 @@
         }
     };
 
+    let InputPlayer = class extends React.Component {
+        constructor(props) {
+            super(props);
+        }
+
+        render() {
+            return(
+                <textarea name="input" id="input" cols="30" rows="10" disabled>{this.props.input}</textarea>
+            );
+        }
+
+    };
+
     let Player = class extends React.Component {
         constructor(props) {
             super(props);
@@ -465,12 +478,14 @@
             this.skipFrame = this.skipFrame.bind(this);
             this.handleKeyDown = this.handleKeyDown.bind(this);
             this.sync = this.sync.bind(this);
+            this.sendInput = this.sendInput.bind(this);
 
             this.state = {
                 cols:           80,
                 rows:           25,
                 title:          _("Player"),
                 term:           null,
+                input:          "",
                 paused:         true,
                 /* Speed exponent */
                 speedExp:       0,
@@ -611,6 +626,13 @@
             });
         }
 
+        sendInput(pkt) {
+            if (pkt) {
+                const current_input = this.state.input;
+                this.setState({input: current_input + pkt.io});
+            }
+        }
+
         /* Synchronize playback */
         sync() {
             let locDelay;
@@ -636,11 +658,6 @@
                         /* Call us when we get one */
                         this.awaitPacket();
                         return;
-                    }
-
-                    /* Skip packets we don't output */
-                    if (pkt.is_io && !pkt.is_output) {
-                        continue;
                     }
 
                     this.pkt = pkt;
@@ -689,7 +706,9 @@
                 }
 
                 /* Output the packet */
-                if (this.pkt.is_io) {
+                if (this.pkt.is_io && !this.pkt.is_output) {
+                    this.sendInput(this.pkt);
+                } else if (this.pkt.is_io) {
                     this.state.term.write(this.pkt.io);
                 } else {
                     this.state.term.resize(this.pkt.width, this.pkt.height);
@@ -803,6 +822,7 @@
 
             // ensure react never reuses this div by keying it with the terminal widget
             return (
+                <div>
                 <div ref="wrapper" className="panel panel-default">
                     <div className="panel-heading">
                         <span>{this.state.title}</span>
@@ -848,6 +868,8 @@
                         </button>
                         <span>{speedStr}</span>
                     </div>
+                </div>
+                <InputPlayer input={this.state.input} />
                 </div>
             );
         }
