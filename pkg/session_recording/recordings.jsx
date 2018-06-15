@@ -92,8 +92,7 @@
 
         let captures = regex.exec(date);
 
-        if (captures != null)
-        {
+        if (captures != null) {
             let date = captures[1];
             if (captures[3]) {
                 date = date + " " + captures[3];
@@ -176,7 +175,8 @@
         }
 
         markDateField() {
-            let date = $(this.refs.datepicker_input).val().trim();
+            let date = $(this.refs.datepicker_input).val()
+                    .trim();
             if (!parseDate(date)) {
                 this.setState({invalid: true});
             } else {
@@ -190,10 +190,9 @@
                 <div ref="datepicker" className="input-group date input-append date form_datetime">
                     <input ref="datepicker_input" type="text" size="16"
                         className={"form-control bootstrap-datepicker " + (this.state.invalid ? "invalid" : "valid")}
-                        readonly value={this.state.date} onChange={this.handleDateChange} />
-                        <span className="input-group-addon add-on"><i className="fa fa-calendar"></i></span>
-                        <span className="input-group-addon add-on" onClick={this.clearField}>
-                            <i className="fa fa-remove"></i></span>
+                        readOnly value={this.state.date} onChange={this.handleDateChange} />
+                    <span className="input-group-addon add-on"><i className="fa fa-calendar" /></span>
+                    <span className="input-group-addon add-on" onClick={this.clearField}><i className="fa fa-remove" /></span>
                 </div>
             );
         }
@@ -255,14 +254,14 @@
 
                 return (
                     <div className="container-fluid">
-                    <div className="row">
-                        <div className="col-md-12">
-                            <ol className="breadcrumb">
-                                <li><a onClick={this.goBackToList}>Session Recording</a></li>
-                                <li className="active">Session</li>
-                            </ol>
+                        <div className="row">
+                            <div className="col-md-12">
+                                <ol className="breadcrumb">
+                                    <li><a onClick={this.goBackToList}>Session Recording</a></li>
+                                    <li className="active">Session</li>
+                                </ol>
+                            </div>
                         </div>
-                    </div>
                         <div className="row">
                             <div className="col-md-6">
                                 <div className="panel panel-default">
@@ -344,8 +343,7 @@
         handleColumnClick(event) {
             if (this.state.sorting_field === event.currentTarget.id) {
                 this.setState({sorting_asc: !this.state.sorting_asc});
-            }
-            else {
+            } else {
                 this.setState({
                     sorting_field: event.currentTarget.id,
                     sorting_asc: 'asc'
@@ -387,13 +385,13 @@
         render() {
             let columnTitles = [
                 (<div id="user" className="sort" onClick={this.handleColumnClick}><span>{_("User")}</span> <div
-                    ref="user" className="sort-icon"></div></div>),
+                    ref="user" className="sort-icon" /></div>),
                 (<div id="start" className="sort" onClick={this.handleColumnClick}><span>{_("Start")}</span> <div
-                    ref="start" className="sort-icon"></div></div>),
+                    ref="start" className="sort-icon" /></div>),
                 (<div id="end" className="sort" onClick={this.handleColumnClick}><span>{_("End")}</span> <div
-                    ref="end" className="sort-icon"></div></div>),
+                    ref="end" className="sort-icon" /></div>),
                 (<div id="duration" className="sort" onClick={this.handleColumnClick}><span>{_("Duration")}</span> <div
-                    ref="duration" className="sort-icon"></div></div>),
+                    ref="duration" className="sort-icon" /></div>),
             ];
             let list = this.getSortedList();
             let rows = [];
@@ -401,13 +399,13 @@
             for (let i = 0; i < list.length; i++) {
                 let r = list[i];
                 let columns = [r.user,
-                               formatDateTime(r.start),
-                               formatDateTime(r.end),
-                               formatDuration(r.end - r.start)];
+                    formatDateTime(r.start),
+                    formatDateTime(r.end),
+                    formatDuration(r.end - r.start)];
                 rows.push(<Listing.ListingRow
                             rowId={r.id}
                             columns={columns}
-                            navigateToItem={this.navigateToRecording.bind(this, r)}/>);
+                            navigateToItem={this.navigateToRecording.bind(this, r)} />);
             }
             return (
                 <div>
@@ -415,21 +413,21 @@
                         <table className="form-table-ct">
                             <th>
                                 <td className="top">
-                                    <label className="control-label" for="dateSince">Since</label>
+                                    <label className="control-label" htmlFor="dateSince">Since</label>
                                 </td>
                                 <td>
                                     <Datetimepicker onDateChange={this.props.onDateSinceChange}
                                         date={this.props.dateSince} />
                                 </td>
                                 <td className="top">
-                                    <label className="control-label" for="dateUntil">Until</label>
+                                    <label className="control-label" htmlFor="dateUntil">Until</label>
                                 </td>
                                 <td>
                                     <Datetimepicker onDateChange={this.props.onDateUntilChange}
-                                        date={this.props.dateUntil}/>
+                                        date={this.props.dateUntil} />
                                 </td>
                                 <td className="top">
-                                    <label className="control-label" for="username">Username</label>
+                                    <label className="control-label" htmlFor="username">Username</label>
                                 </td>
                                 <td>
                                     <UserPicker onUsernameChange={this.props.onUsernameChange}
@@ -523,16 +521,14 @@
                 }
 
                 let ts = Math.floor(
-                            parseInt(e["__REALTIME_TIMESTAMP"], 10) /
-                                1000);
+                    parseInt(e["__REALTIME_TIMESTAMP"], 10) / 1000);
 
                 let r = this.recordingMap[id];
                 /* If no recording found */
                 if (r === undefined) {
                     /* Create new recording */
                     r = {id:            id,
-                         matchList:     ["_UID=" + this.uid,
-                                         "TLOG_REC=" + id],
+                         matchList:     ["_UID=" + this.uid, "TLOG_REC=" + id],
                          user:          e["TLOG_USER"],
                          boot_id:       e["_BOOT_ID"],
                          session_id:    parseInt(e["TLOG_SESSION"], 10),
@@ -545,8 +541,8 @@
                     this.recordingMap[id] = r;
                     /* Insert the recording in order */
                     for (j = recordingList.length - 1;
-                         j >= 0 && r.start < recordingList[j].start;
-                         j--);
+                        j >= 0 && r.start < recordingList[j].start;
+                        j--);
                     recordingList.splice(j + 1, 0, r);
                 } else {
                     /* Adjust existing recording */
@@ -559,8 +555,8 @@
                         r.duration = r.end - r.start;
                         /* Find the recording in the list */
                         for (j = recordingList.length - 1;
-                             j >= 0 && recordingList[j] != r;
-                             j--);
+                            j >= 0 && recordingList[j] != r;
+                            j--);
                         /* If found */
                         if (j >= 0) {
                             /* Remove */
@@ -568,8 +564,8 @@
                         }
                         /* Insert the recording in order */
                         for (j = recordingList.length - 1;
-                             j >= 0 && r.start < recordingList[j].start;
-                             j--);
+                            j >= 0 && r.start < recordingList[j].start;
+                            j--);
                         recordingList.splice(j + 1, 0, r);
                     }
                 }
@@ -603,9 +599,9 @@
             }
 
             this.journalctlRecordingID = this.state.recordingID;
-            this.journalctl = Journal.journalctl(matches, options).
-                                        fail(this.journalctlError).
-                                        stream(this.journalctlIngest);
+            this.journalctl = Journal.journalctl(matches, options)
+                    .fail(this.journalctlError)
+                    .stream(this.journalctlIngest);
         }
 
         /*
@@ -662,7 +658,7 @@
             let proc = cockpit.spawn(["getent", "passwd", "tlog"]);
 
             proc.stream((data) => {
-                this.uid = data.split(":",3)[2];
+                this.uid = data.split(":", 3)[2];
                 this.journalctlStart();
                 proc.close();
             });

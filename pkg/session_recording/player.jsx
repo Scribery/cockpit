@@ -35,11 +35,11 @@
     let getValidField = function (object, field, type) {
         let value;
         if (!(field in object)) {
-            throw "\"" + field + "\" field is missing";
+            throw Error("\"" + field + "\" field is missing");
         }
         value = object[field];
-        if (typeof(value) != type) {
-            throw "invalid \"" + field + "\" field type: " + typeof(value);
+        if (typeof (value) != typeof (type)) {
+            throw Error("invalid \"" + field + "\" field type: " + typeof (value));
         }
         return value;
     }
@@ -57,23 +57,23 @@
             this.handleDone = this.handleDone.bind(this);
             /* RegExp used to parse message's timing field */
             this.timingRE = new RegExp(
-                                    /* Delay (1) */
-                                    "\\+(\\d+)|" +
-                                    /* Text input (2) */
-                                    "<(\\d+)|" +
-                                    /* Binary input (3, 4) */
-                                    "\\[(\\d+)/(\\d+)|" +
-                                    /* Text output (5) */
-                                    ">(\\d+)|" +
-                                    /* Binary output (6, 7) */
-                                    "\\](\\d+)/(\\d+)|" +
-                                    /* Window (8, 9) */
-                                    "=(\\d+)x(\\d+)|" +
-                                    /* End of string */
-                                    "$",
-                                    /* Continue after the last match only */
-                                    /* FIXME Support likely sparse */
-                                    "y"
+                /* Delay (1) */
+                "\\+(\\d+)|" +
+                /* Text input (2) */
+                "<(\\d+)|" +
+                /* Binary input (3, 4) */
+                "\\[(\\d+)/(\\d+)|" +
+                /* Text output (5) */
+                ">(\\d+)|" +
+                /* Binary output (6, 7) */
+                "\\](\\d+)/(\\d+)|" +
+                /* Window (8, 9) */
+                "=(\\d+)x(\\d+)|" +
+                /* End of string */
+                "$",
+                /* Continue after the last match only */
+                /* FIXME Support likely sparse */
+                "y"
             );
             /* List of matches to apply when loading the buffer from Journal */
             this.matchList = matchList;
@@ -100,8 +100,8 @@
             this.error = null;
             /* The journalctl reading the recording */
             this.journalctl = Journal.journalctl(
-                                this.matchList,
-                                {count: "all", follow: false});
+                this.matchList,
+                {count: "all", follow: false});
             this.journalctl.fail(this.handleError);
             this.journalctl.stream(this.handleStream);
             this.journalctl.done(this.handleDone);
@@ -129,12 +129,14 @@
             /* If an error has occurred previously */
             if (this.error !== null) {
                 /* Reject immediately */
-                return $.Deferred().reject(this.error).promise();
+                return $.Deferred().reject(this.error)
+                        .promise();
             }
 
             /* If the buffer was stopped */
             if (this.journalctl === null) {
-                return $.Deferred().reject(null).promise();
+                return $.Deferred().reject(null)
+                        .promise();
             }
 
             /* If packet index is not specified */
@@ -145,7 +147,8 @@
                 /* If it has already been received */
                 if (idx < this.pktList.length) {
                     /* Return resolved promise */
-                    return $.Deferred().resolve().promise();
+                    return $.Deferred().resolve()
+                            .promise();
                 }
             }
 
@@ -250,101 +253,101 @@
                 /* Match next timing entry */
                 matches = this.timingRE.exec(timing);
                 if (matches === null) {
-                    throw "invalid timing string";
+                    throw Error("invalid timing string");
                 } else if (matches[0] == "") {
                     break;
                 }
 
                 /* Switch on entry type character */
                 switch (t = matches[0][0]) {
-                    /* Delay */
-                    case "+":
-                        x = parseInt(matches[1], 10);
-                        if (x == 0) {
-                            break;
-                        }
-                        if (io.length > 0) {
-                            this.addPacket({pos: this.pos,
-                                            is_io: true,
-                                            is_output: is_output,
-                                            io: io.join()});
-                            io = [];
-                        }
-                        this.pos += x;
+                /* Delay */
+                case "+":
+                    x = parseInt(matches[1], 10);
+                    if (x == 0) {
                         break;
-                    /* Text or binary input */
-                    case "<":
-                    case "[":
-                        x = parseInt(matches[(t == "<") ? 2 : 3], 10);
-                        if (x == 0) {
-                            break;
-                        }
-                        if (io.length > 0 && is_output) {
-                            this.addPacket({pos: this.pos,
-                                            is_io: true,
-                                            is_output: is_output,
-                                            io: io.join()});
-                            io = [];
-                        }
-                        is_output = false;
-                        /* Add (replacement) input characters */
-                        s = in_txt.slice(in_txt_pos, in_txt_pos += x);
-                        if (s.length != x) {
-                            throw("timing entry out of input bounds");
-                        }
-                        io.push(s);
-                        break;
-                    /* Text or binary output */
-                    case ">":
-                    case "]":
-                        x = parseInt(matches[(t == ">") ? 5 : 6], 10);
-                        if (x == 0) {
-                            break;
-                        }
-                        if (io.length > 0 && !is_output) {
-                            this.addPacket({pos: this.pos,
-                                            is_io: true,
-                                            is_output: is_output,
-                                            io: io.join()});
-                            io = [];
-                        }
-                        is_output = true;
-                        /* Add (replacement) output characters */
-                        s = out_txt.slice(out_txt_pos, out_txt_pos += x);
-                        if (s.length != x) {
-                            throw("timing entry out of output bounds");
-                        }
-                        io.push(s);
-                        break;
-                    /* Window */
-                    case "=":
-                        x = parseInt(matches[8], 10);
-                        y = parseInt(matches[9], 10);
-                        if (x == this.width && y == this.height) {
-                            break;
-                        }
-                        if (io.length > 0) {
-                            this.addPacket({pos: this.pos,
-                                            is_io: true,
-                                            is_output: is_output,
-                                            io: io.join()});
-                            io = [];
-                        }
+                    }
+                    if (io.length > 0) {
                         this.addPacket({pos: this.pos,
-                                        is_io: false,
-                                        width: x,
-                                        height: y});
-                        this.width = x;
-                        this.height = y;
+                                        is_io: true,
+                                        is_output: is_output,
+                                        io: io.join()});
+                        io = [];
+                    }
+                    this.pos += x;
+                    break;
+                    /* Text or binary input */
+                case "<":
+                case "[":
+                    x = parseInt(matches[(t == "<") ? 2 : 3], 10);
+                    if (x == 0) {
                         break;
+                    }
+                    if (io.length > 0 && is_output) {
+                        this.addPacket({pos: this.pos,
+                                        is_io: true,
+                                        is_output: is_output,
+                                        io: io.join()});
+                        io = [];
+                    }
+                    is_output = false;
+                    /* Add (replacement) input characters */
+                    s = in_txt.slice(in_txt_pos, in_txt_pos += x);
+                    if (s.length != x) {
+                        throw Error("timing entry out of input bounds");
+                    }
+                    io.push(s);
+                    break;
+                    /* Text or binary output */
+                case ">":
+                case "]":
+                    x = parseInt(matches[(t == ">") ? 5 : 6], 10);
+                    if (x == 0) {
+                        break;
+                    }
+                    if (io.length > 0 && !is_output) {
+                        this.addPacket({pos: this.pos,
+                                        is_io: true,
+                                        is_output: is_output,
+                                        io: io.join()});
+                        io = [];
+                    }
+                    is_output = true;
+                    /* Add (replacement) output characters */
+                    s = out_txt.slice(out_txt_pos, out_txt_pos += x);
+                    if (s.length != x) {
+                        throw Error("timing entry out of output bounds");
+                    }
+                    io.push(s);
+                    break;
+                    /* Window */
+                case "=":
+                    x = parseInt(matches[8], 10);
+                    y = parseInt(matches[9], 10);
+                    if (x == this.width && y == this.height) {
+                        break;
+                    }
+                    if (io.length > 0) {
+                        this.addPacket({pos: this.pos,
+                                        is_io: true,
+                                        is_output: is_output,
+                                        io: io.join()});
+                        io = [];
+                    }
+                    this.addPacket({pos: this.pos,
+                                    is_io: false,
+                                    width: x,
+                                    height: y});
+                    this.width = x;
+                    this.height = y;
+                    break;
                 }
             }
 
             if (in_txt_pos < in_txt.length) {
-                throw "extra input present";
+                throw Error("extra input present");
             }
             if (out_txt_pos < out_txt.length) {
-                throw "extra output present";
+                throw Error("extra output present");
             }
 
             if (io.length > 0) {
@@ -368,7 +371,7 @@
             ver = getValidField(message, "ver", "string");
             matches = ver.match("^(\\d+)\\.(\\d+)$");
             if (matches === null || matches[1] > 2) {
-                throw "\"ver\" field has invalid value: " + ver;
+                throw Error("\"ver\" field has invalid value: " + ver);
             }
 
             /* TODO Perhaps check host, rec, user, term, and session fields */
@@ -376,13 +379,13 @@
             /* Extract message ID */
             id = getValidField(message, "id", "number");
             if (id <= this.id) {
-                throw "out of order \"id\" field value: " + id;
+                throw Error("out of order \"id\" field value: " + id);
             }
 
             /* Extract message time position */
             pos = getValidField(message, "pos", "number");
             if (pos < this.message_pos) {
-                throw "out of order \"pos\" field value: " + pos;
+                throw Error("out of order \"pos\" field value: " + pos);
             }
 
             /* Update last received message ID and time position */
@@ -391,9 +394,9 @@
 
             /* Parse message data */
             this.parseMessageData(
-                        getValidField(message, "timing", "string"),
-                        getValidField(message, "in_txt", "string"),
-                        getValidField(message, "out_txt", "string"));
+                getValidField(message, "timing", "string"),
+                getValidField(message, "in_txt", "string"),
+                getValidField(message, "out_txt", "string"));
         }
 
         /*
@@ -439,9 +442,8 @@
             this.journalctl.stop();
             /* Continue with the "following" run  */
             this.journalctl = Journal.journalctl(
-                                this.matchList,
-                                {cursor: this.cursor,
-                                 follow: true, count: "all"});
+                this.matchList,
+                {cursor: this.cursor, follow: true, count: "all"});
             this.journalctl.fail(this.handleError);
             this.journalctl.stream(this.handleStream);
             /* NOTE: no "done" handler on purpose */
@@ -559,8 +561,8 @@
 
         /* Subscribe for a packet at specified index */
         awaitPacket(idx) {
-            this.buf.awaitPacket(idx).done(this.handlePacket).
-                                      fail(this.handleError);
+            this.buf.awaitPacket(idx).done(this.handlePacket)
+                    .fail(this.handleError);
         }
 
         /* Set next packet timeout, ms */
@@ -601,8 +603,8 @@
 
         _transform(width, height) {
             var relation = Math.min(
-              this.state.containerWidth / this.state.term.element.offsetWidth,
-              this.containerHeight / this.state.term.element.offsetHeight
+                this.state.containerWidth / this.state.term.element.offsetWidth,
+                this.containerHeight / this.state.term.element.offsetHeight
             );
             this.setState({
                 scale: relation,
@@ -861,7 +863,7 @@
 
     Player.propTypes = {
         matchList: React.PropTypes.array,
-        onTitleChanged: React.PropTypes.func
+        // onTitleChanged: React.PropTypes.func
     };
 
     module.exports = { Player: Player };
