@@ -465,17 +465,33 @@
             this.skipFrame = this.skipFrame.bind(this);
             this.handleKeyDown = this.handleKeyDown.bind(this);
             this.sync = this.sync.bind(this);
+            this.zoomIn = this.zoomIn.bind(this);
+            this.zoomOut = this.zoomOut.bind(this);
+            this.fitTo = this.fitTo.bind(this);
+            this.dragPan = this.dragPan.bind(this);
+            this.dragPanEnable = this.dragPanEnable.bind(this);
+            this.dragPanDisable = this.dragPanDisable.bind(this);
+            this.zoom = this.zoom.bind(this);
 
             this.state = {
-                cols:           80,
-                rows:           25,
-                title:          _("Player"),
-                term:           null,
-                paused:         true,
+                cols:               80,
+                rows:               25,
+                title:              _("Player"),
+                term:               null,
+                paused:             true,
                 /* Speed exponent */
-                speedExp:       0,
-                containerWidth: 630,
-                scale:          1
+                speedExp:           0,
+                container_width:    630,
+                scale:              1,
+                scale_initial:      1,
+                scale_lock:         false,
+                term_top_style:     "50%",
+                term_left_style:    "50%",
+                term_translate:     "-50%, -50%",
+                term_scroll:        "hidden",
+                term_zoom_max:      false,
+                term_zoom_min:      false,
+                drag_pan:           false,
             };
 
             this.containerHeight = 290;
@@ -605,7 +621,11 @@
               this.containerHeight / this.state.term.element.offsetHeight
             );
             this.setState({
+                term_top_style: "50%",
+                term_left_style: "50%",
+                term_translate: "-50%, -50%",
                 scale: relation,
+                scale_initial: relation,
                 cols: width,
                 rows: height
             });
@@ -693,7 +713,9 @@
                     this.state.term.write(this.pkt.io);
                 } else {
                     this.state.term.resize(this.pkt.width, this.pkt.height);
-                    this._transform(this.pkt.width, this.pkt.height);
+                    if (!this.state.scale_lock) {
+                        this._transform(this.pkt.width, this.pkt.height);
+                    }
                 }
 
                 /* We no longer have a packet */
@@ -747,10 +769,105 @@
                 ".": this.skipFrame,
                 "G": this.fastForwardToEnd,
                 "R": this.rewindToStart,
+                "+": this.zoomIn,
+                "=": this.zoomIn,
+                "-": this.zoomOut,
+                "Z": this.fitIn,
             };
             if (keyCodesFuncs[event.key]) {
                 (keyCodesFuncs[event.key](event));
             }
+        }
+
+        zoom(scale) {
+            if (scale.toFixed(6) === this.state.scale_initial.toFixed(6)) {
+                this.fitTo();
+            } else {
+                this.setState({
+                    term_top_style: "0",
+                    term_left_style: "0",
+                    term_translate: "0, 0",
+                    scale_lock: true,
+                    term_scroll: "auto",
+                    scale: scale,
+                    term_zoom_max: false,
+                    term_zoom_min: false,
+                });
+            }
+        }
+
+        dragPan() {
+            (this.state.drag_pan ? this.dragPanDisable() : this.dragPanEnable());
+        }
+
+        dragPanEnable() {
+            this.setState({drag_pan: true});
+
+            let scrollwrap = this.refs.scrollwrap;
+
+            let clicked = false;
+            let clickX;
+            let clickY;
+
+            $(this.refs.scrollwrap).on({
+                'mousemove': function(e) {
+                    clicked && updateScrollPos(e);
+                },
+                'mousedown': function(e) {
+                    clicked = true;
+                    clickY = e.pageY;
+                    clickX = e.pageX;
+                },
+                'mouseup': function() {
+                    clicked = false;
+                    $('html').css('cursor', 'auto');
+                }
+            });
+
+            let updateScrollPos = function(e) {
+                $('html').css('cursor', 'move');
+                $(scrollwrap).scrollTop($(scrollwrap).scrollTop() + (clickY - e.pageY));
+                $(scrollwrap).scrollLeft($(scrollwrap).scrollLeft() + (clickX - e.pageX));
+            };
+        }
+
+        dragPanDisable() {
+            this.setState({drag_pan: false});
+            let scrollwrap = this.refs.scrollwrap;
+            $(scrollwrap).off("mousemove");
+            $(scrollwrap).off("mousedown");
+            $(scrollwrap).off("mouseup");
+        }
+
+        zoomIn() {
+            let scale = this.state.scale;
+            if (scale < 2.1) {
+                scale = scale + 0.1;
+                this.zoom(scale);
+            } else {
+                this.setState({term_zoom_max: true});
+            }
+        }
+
+        zoomOut() {
+            let scale = this.state.scale;
+            if (scale >= 0.2) {
+                scale = scale - 0.1;
+                this.zoom(scale);
+            } else {
+                this.setState({term_zoom_min: true});
+            }
+        }
+
+        fitTo() {
+            this.setState({
+                term_top_style: "50%",
+                term_left_style: "50%",
+                term_translate: "-50%, -50%",
+                scale_lock: false,
+                term_scroll: "hidden",
+            });
+            this._transform();
         }
 
         componentWillUpdate(nextProps, nextState) {
@@ -784,21 +901,25 @@
             }
 
             const style = {
-                "transform": "scale(" + this.state.scale + ") translate(-50%, -50%)",
+                "transform": "scale(" + this.state.scale + ") translate(" + this.state.term_translate + ")",
                 "transform-origin": "top left",
                 "display": "inline-block",
                 "margin": "0 auto",
                 "position": "absolute",
-                "top": "50%",
-                "left": "50%",
+                "top": this.state.term_top_style,
+                "left": this.state.term_left_style,
             };
 
             const scrollwrap = {
                 "min-width": "630px",
                 "height": this.containerHeight + "px",
                 "background-color": "#f5f5f5",
-                "overflow": "hidden",
+                "overflow": this.state.term_scroll,
                 "position": "relative",
+            };
+
+            const to_right = {
+                "float": "right",
             };
 
             // ensure react never reuses this div by keying it with the terminal widget
@@ -808,7 +929,7 @@
                         <span>{this.state.title}</span>
                     </div>
                     <div className="panel-body">
-                        <div style={scrollwrap}>
+                        <div className={(this.state.drag_pan ? "dragnpan" : "")} style={scrollwrap} ref="scrollwrap">
                             <div ref="term" className="console-ct" key={this.state.term} style={style} />
                         </div>
                     </div>
@@ -847,6 +968,20 @@
                             x2
                         </button>
                         <span>{speedStr}</span>
+                        <span style={to_right}>
+                            <button title="Drag'n'Pan" type="button" className="btn btn-default btn-lg"
+                                onClick={this.dragPan}>
+                                <i className={"fa fa-" + (this.state.drag_pan ? "hand-rock-o" : "hand-paper-o")}
+                                    aria-hidden="true" /></button>
+                            <button title="Zoom In - Hotkey: =" type="button" className="btn btn-default btn-lg"
+                                onClick={this.zoomIn} disabled={this.state.term_zoom_max}>
+                                <i className="fa fa-search-plus" aria-hidden="true" /></button>
+                            <button title="Fit To - Hotkey: Z" type="button" className="btn btn-default btn-lg"
+                                onClick={this.fitTo}><i className="fa fa-expand" aria-hidden="true" /></button>
+                            <button title="Zoom Out - Hotkey: -" type="button" className="btn btn-default btn-lg"
+                                onClick={this.zoomOut} disabled={this.state.term_zoom_min}>
+                                <i className="fa fa-search-minus" aria-hidden="true"/></button>
+                        </span>
                     </div>
                 </div>
             );
