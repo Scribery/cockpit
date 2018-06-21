@@ -435,6 +435,13 @@
                                     <UserPicker onUsernameChange={this.props.onUsernameChange}
                                         username={this.props.username} />
                                 </td>
+                                <td className="top">
+                                    <label className="control-label" for="config">Configuration</label>
+                                </td>
+                                <td className="top">
+                                    <a href="/cockpit/@localhost/session_recording/config.html" className="btn btn-default" data-toggle="modal">
+                                        <i className="fa fa-cog" aria-hidden="true"></i></a>
+                                </td>
                             </th>
                         </table>
                     </div>
